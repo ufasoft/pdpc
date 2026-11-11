@@ -1,0 +1,1081 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	PARSER
+
+.INCLUDE /ccmacr.inc/
+
+.GLOBL	BNOT$I, BNOT$L, LNOT$I, LNOT$L, NEG$I, NEG$L, F$NEG, I$XOR, L$XOR, O$NE, T$ENTR, $INVOK, I$LNO
+.GLOBL	I$CMP, L$CMP, F$CMP, $I2L, $U2L, $L2I, $L2F, $UL2F, $F2L, PU$16, AD$16, PU$32, P$ONE, I$AND, I$OR
+.GLOBL	FISYM, FISYM1, EXTYPE, TH.SBR, TH.UBR, IS.ARG, ENUMS, SYNAM0, SYNAM1, IS.INV
+.GLOBL	RETUR, PAINT, MEMSTM, IS.OPE, BNDARG, GENBIN, NO.EXP, GSD, VARS, LOCALS, EMIOF5, P$LAD
+.GLOBL	TDEFS, EMADD, TMP2R1, ASMSTM, TMP, EXPANS, LOCFUN, $DRD, GOTOS, LABELS, ARITH, BEGAGG, AGGLV
+.GLOBL	TEXT, RDATA, RELOCS, HAS.TO, TYPES
+.GLOBL	EXPR.2
+
+.PSECT
+
+;; R2, R3 - subexpression types
+;; OUTPUT: R0: Most common type of R2, R3
+COMTYP::MOV	R2, R0
+	BEQ	9$		; void wins
+	TST	R3
+	BEQ	8$		; void wins
+	BIT	#40000, R2
+	BEQ	9$		; Non-scalar must be the same. Or pointer wins over 0
+	CMP	R2, R3
+	BGE	9$		; Signed/longer type wins
+8$:	MOV	R3, R0
+9$:	RETURN
+
+
+DEFGSD::MOV	SYNAM0, R1
+	MOV	SYNAM1, R2
+DGSD::	PUSH.D	GSD
+	MOV	R3, R1		; Global Symbol Name
+	CLR	R2
+	PUSH.D	GSD
+RET.A:	RETURN
+
+;; Define Global Symbol in GSD
+DEFSYM:	MOV	GSD, R5
+	ADD	GSD+2, R5
+	MOV	TEXT+2, -(R5)
+	BIS	#150, -(R5)	; Set Global Symbol Name Entry flags: Relative Symbol definition
+	RETURN
+
+
+
+
+;; Type of Expression in parenthesis
+;; OUTPUT:
+;;   CF=0 - Expression. The type is in EXTYPE. R2: TEXT offset of the beginning of the expression code
+;;   CF=1 - R1: Type
+TYOREX:	.TYPEP
+	BCS	5$
+	MOV	TEXT+2, R2
+	.PEXPP			; CF: 0
+	RETURN
+5$:	MOV	R1, R3
+	T.DCL
+	CK.TOK	T.RPAR
+	MOV	R2, R1
+	SEC
+	RETURN
+
+
+
+;; Parse typed declarations and save them into Stack
+;; Invoke it with JSR R5, TDECLS
+TDECLS::TST	(SP)+
+	.TYPEP
+	BCC	ERR.A
+	MOV	R1, R3
+1$:	T.DCL
+	PUSH	R1, R2
+	IF.TOK	T.COMM, 1$
+	CK.TOK	T.SEMI
+	JMP	(R5)
+
+
+;; Define function parameter
+DFFPAR:	IF.TOK	T.3DOT, 1$
+	.TYPED
+	PUSH.W	LOCALS
+	MOV	R2, R1
+	IS.ARR
+	BCC	3$
+	PTR.OF
+	BR	4$
+1$:	CK.TOK	T.RPAR		; ... is always the last parameter
+	UN.TOK
+	MOV	#-1, R2
+	CALL	(PC)		; Push (-1, -1) into LOCALS
+3$:	MOV	R2, R1
+4$:	PUSH.W	LOCALS
+	RETURN
+
+FUNTY1:
+;!!!R	TSTB	IN.DEFN
+;!!!R	BNE	ERR.A
+		; Fallthrough with R4 != 0 to fill LOCALS
+;; Define function
+;; INPUT:
+;;  R2: Type
+;;  R3: Root Type
+;;  R4 != 0: fill LOCALS
+;; OUTPUT:
+;;  R2: Function Type
+;;  R3: Root Type
+;;  R4: restored
+FUNTYP:	PUSH	R4, R3, R2
+	MOV	#LOCALS+2, R5
+	MOV	(R5), R3	; R3: saved LOCALS+2
+	IF.TOK	T.RPAR, 5$	; foo()  means foo(...)
+	INCB	IN.DEFN
+	.ITER	DFFPAR, T.RPAR
+	DECB	IN.DEFN
+	BR	3$
+5$:	MOV	#-1, R1
+	MOV	R1, R2
+	PUSH.D	LOCALS
+3$:	MOV	(R5), R1	; MOV LOCALS+2, R1
+	SUB	R3, R1
+	ASR	R1
+	MOV	R1, R0
+	ADD	#TC.FUN*400+2, R1
+	PUSH	TYPES+2		; Function Type
+	PUSH.D	TYPES
+	MOV	LOCALS, R2
+	ADD	R3, R2
+	ASR	R0
+	BEQ	2$
+1$:	TST	(R2)+
+	MOV	(R2)+, R1
+	PUSH.W	TYPES
+	SOB	R0, 1$
+2$:	MOV	R4, R1		; R1: symbol if declaring or defining a function.
+	BEQ	4$
+	TSTB	IN.DEFN
+	BEQ	6$
+4$:	MOV	R3, (R5)	; MOV R3, LOCALS+2
+6$:	POP	R2		; R2: Function Type
+	POP	R4, R3		; R4: Input Type
+	BEQ	8$
+	ADD	TYPES, R4
+	MOV	R2, 2(R4)
+	BR	9$
+8$:	MOV	R2, R3
+9$:	POP	R4
+	RETURN
+
+ERR.A:	.ERR
+
+
+LPARTY:	CALL	PARTYP
+	CK.TOK	T.RPAR
+;; Completes type declaration
+CNTYPE:	IF.TOK	T.LPAR, FUNTYP
+	IF.TOK	T.BRA, ARRTYP
+	MOV	CURTYP, R0	;!!!?
+	CLR	R2
+	CLR	R3
+	RETURN
+
+ARRTYP:	PUSH	#-1		; Undefined dimension
+	IF.TOK	T.KET, 2$
+	EV.CIE
+	MOV	R1, (SP)
+	CK.TOK	T.KET
+2$:     TST	R2
+	BEQ	3$
+	ADD	TYPES, R2
+	MOV	TYPES+2, 2(R2)
+3$:	MOV	TYPES+2, R2
+	MOV	#TC.ARR*400+4, R1
+	PUSH.D	TYPES
+	POP	R1		; R1: dimension
+	PUSH.W	TYPES
+	TST	R3
+	BNE	8$
+	MOV	R2, R3
+8$:	IF.TOK	T.BRA, ARRTYP
+	MOV	R4, R1		; R1: Symbol
+	RETURN
+
+
+;; () in type
+;; OUTPUT:
+;;  R1: symbol or 0
+;;  R2: type
+;;  R3: root type
+PARTYP:	G.TOK
+	switch
+	case	T.AST	, PARPTR
+	case	T.SYM	, 1$
+	case	T.LPAR	, LPARTY
+	case	T.CONST	, PARTYP	; ignore `const`
+	default
+	UN.TOK
+	CLR	R1
+	CLR	R4		; No Symbol
+	BR	CNTYPE
+
+1$:	.SYMB
+	MOV	R1, R4		; R4: symbol
+	MOVB	IN.DEFN, R3
+	BISB	IS.STA, R3
+	BNE	7$		; local of static symbol
+	MOV	#4*400, R3	; Global Symbol Name
+	.SUBRC	DEFGSD
+7$:	CLR	R3
+	IF.TOK	T.LPAR, FUNTY1
+	BR	CNTYPE
+
+2$:	CK.TOK	T.RPAR
+	MOV	(R5)+, R1
+	CALL	(R5)
+	TST	R4
+	BEQ	ERR.A
+	MOV	R1, R2
+	.SYMB
+	CALL	(R4)
+
+;; Pointer type
+PARPTR:	MOV	#TC.PTR*400+2, R1
+	MOV	R1, R2
+	PUSH	TYPES+2
+	PUSH.D	TYPES
+	CALL	PARTYP
+	TST	R3
+	BNE	6$
+	MOV	(SP), R3	; R3: PTR-type to be returned
+6$:	TST	R2
+	BEQ	5$
+	ADD	TYPES, R2
+	MOV	(SP), 2(R2)
+5$:
+POPR2R:	POP	R2		; R2: PTR-type type to yet-undefined type
+	RETURN
+
+
+
+;; Parse typed declaration
+;; R3: base type
+;; OUTPUT:
+;;  R1: symbol or 0
+;;  R2: type
+DCLTOR::PUSH	R3
+	CLR	R2
+	CALL	PARTYP
+	TST	R2
+	BEQ	1$
+	ADD	TYPES, R2
+	MOV	(SP), 2(R2)
+	MOV	R3, (SP)
+1$:	BR	POPR2R		; POP R2; RETURN
+
+
+
+ARROW:	C.RVAL
+	CALL	DEREF1
+DOT:	G.SYMB
+	T.FLD
+	EXTY.P
+	NEG	R2
+	MOV	R2, (R4)
+	.EMI	AD$16
+	BR	EMEUNA
+
+
+PINDEX:	C.RVAL
+	.PEXPR
+	C.RVAL
+	CK.TOK	T.KET		; ]
+	CALL	EMADD
+	.EXTYP
+	CALL	DEREF1
+EUNAR:	R.TOK
+	BEQ	RET.E
+	MOV	#T.ADD&177, R2		; Used in INCR
+	switch
+	case	T.BRA	, PINDEX ; [
+	case	T.ARRO	, ARROW	; ->
+	case	T.DOT	, DOT	; .
+	case	T.LPAR	, INV	; (
+	case	T.DECR	, PODECR
+	case	T.INCR	, POINCR
+	default
+	UN.TOK
+	RETURN
+INV:	EXTY.P
+	CMP	(R4), #-TY.UNK
+	BNE	4$
+	NEG	(R4)		; Convert to TY.UNK
+4$:	C.RVAL
+	CLR	R5
+	CMP	R1, #TY.UNK
+	BEQ	INVOKE
+	BHI	ERR.B
+	IS.PTR
+	IS.FUN
+	BNE	ERR.B
+	MOV	#TY.I, (R4)	; Any type with sizeof==2
+	ADD	TYPES, R1
+	MOV	R1, R5
+	TST	(R5)+
+			; Fallthrough
+;; Parse function invocation
+;; R5: Function Type descriptor or 0
+INVOKE:	PUSH	#EUNAR
+	SV.VEC	BINDS
+	TST	-(SP)		; Space to save MEMSTM later
+	MOV	#TY.I, R1
+	TST	R5
+	BEQ	3$		; Assume int Return Type for undeclared function
+	MOV	(R5)+, R1
+3$:	PUSH	R1		; (SP): Return Type
+	CLR	R2		; R2: arguments size and byte-encoded return length
+	SZ.TYP
+	switch
+	case	0	, 2$
+	case	2	, 6$
+	case	4	, 5$
+	default
+	.ERR	20.
+5$:	ADD	#177000, R2
+6$:	ADD	#400, R2
+2$:	;!!!? MOVB	IS.ARG, -(SP)
+	CLR	R1		; parameter list
+	.SUBRC	BNDARG
+	MOV	MEMSTM, 2(SP)
+	INC	IS.INV
+	CLR	R0		; R0: EXTYPE offset
+4$:	TST	(R0)+
+	POP.W	BINDS
+	BCS	7$
+	MOV	R1, MEMSTM
+	CLR	HAS.TO		;!!!?
+	R.TOK
+	BEQ	7$		; No arguments
+	UN.TOK
+	.PEXPR
+	C.RVAL
+	SZ.ALG			; R2 += aligned sizeof()
+	BR	4$
+7$:	.EMIT	$INVOK
+	SUB	R0, EXTYPE+2	; Reduce EXTYPE by saved BINDS's size
+	MOV	R2, R1		; Args size and byte-encoded return length
+	.EMIT
+	POP	R1		; Return type
+	PU.EXT
+;!!!?	MOVB	(SP)+, IS.ARG
+	DEC	IS.INV
+REBIN8::POP	MEMSTM
+REBIND::MFPS	R0
+	RE.VEC	BINDS
+	MTPS	R0
+RET.E:	RETURN
+
+;; (
+LPAR:	CALL	TYOREX
+	BCC	EUNA.A
+			; Fallthrough
+;; R1: target type
+CAST:	MOV	R1, R5
+	.UNARY
+	MOV	R5, R1
+	.CAST
+	RETURN
+
+
+ERR.B:	.ERR
+
+
+
+
+PENUV:	PUSH	R1
+	PU.TYI
+	POP	R1
+EMEUNA:	.EMIT
+EUNA.A:	BR	EUNAR
+
+;; Constant Address expression
+CADDR:	G.SYMB
+CADDR1:	.EMI	PU$16
+	.EMIT
+	.EMI	PU$16
+	.EMIT	0
+	.FIND2	VARS		; R1: type
+	BCC	ERR.C
+	.EMI	PU$16
+	MOV	#TY.SYM, R5
+	BR	EM.RET		; .EMIT; MOV R5, R1; PU.EXT; RETURN
+
+
+
+ADDROF:	TSTB	IS.CE
+	BNE	CADDR
+	.UNARY
+	PO.EXT
+	BMI	ADDRO1		; L-Value
+	IS.FUN
+	BEQ	ADDRO2		; was R-Value
+ERR.C:	.ERR	21.
+ADDRO1:	NEG	R1
+ADDRO2:	PTR.OF			; find pointer type
+ADDRO3:	PU.EXT
+RET.B:	RETURN
+
+;; Parse Variable reference in expression
+PAVAR:	.SYMB
+	MOV	R1, CURSYM
+	TST	IS.CE
+	BNE	CADDR1
+;; Search the Symbol in LOCALS
+	MOV	#LOCALS+2, R5
+	MOV	(R5), R4
+	ADD	-(R5), R4	; R5: #LOCALS
+	MOV	R4, R3		; R4, R3: Address behind LOCALS
+5$:	CMP	R4, (R5)	; CMP	R4, LOCALS
+	BLOS	7$
+1$:	CMP	-(R4), -(R4)
+	CMP	(R4), R1
+	BNE	5$
+	MOV	2(R4), R1
+	IS.FUN
+	BNE	2$
+	MOV	R1, R2		; R2: Type
+	.EMI	PU$16		; Any Function symbol is represented as address
+	CLR	R1
+	BR	PAFUN
+;	IS.ARR
+;	BCC	2$
+;	PTR.OF			; R1: element type*
+;	BR	3$
+2$:	NEG	R1		; L-Value type
+3$:	PU.EXT
+	CMP	(R4)+, (R4)+
+	MOV	R4, R1
+	SUB	LOCALS, R1
+	LOC.OF
+	MOV	R1, R2		; R0: offset to local var/parameter
+	EXTY.P			; Skip top, the type of current expression
+4$:	CMP	R4, EXTYPE
+	BEQ	6$
+	MOV	-(R4), R1
+	SZ.ALG			; R2 += aligned sizeof(subexpression)
+	BR	4$
+6$:	.EMI	P$LAD
+	MOV	R2, R1
+	BR	EMEUNA		; .EMIT; BR EUNAR
+
+7$:	.EMI	PU$16		; Any Global symbol is represented as address or 16-bit enum value
+	.SYM
+	BCC	8$		; No local symbol found
+	DEC	R0
+	BMI	PENUV		; enum value
+8$:	MOV	(PC)+, R1
+IS.CE::	.WORD	0		; Const Expression mode
+	BNE	ERR.F
+PAFUN:	.EMIT			; Address == 0
+	PUSH	R2		; (SP): Type
+	MOV	#4*400+100, R3	; Global Symbol Name
+	CALL	DEFGSD
+	MOV	TEXT+2, R1
+	TST	-(R1)
+	MOV	(PC)+, R2
+CURSYM:	.WORD	0		; Current Symbol
+	PUSH.D	RELOCS
+	CLR	R0		; Is variable-type
+	POP	R1		; R1: Type
+	BEQ	3$		; Not-Defined type
+	IS.FUN
+	BNE	4$
+	INC	R0
+	BR	4$
+3$:	IF.TOK	T.LPAR, 2$
+	.ERR	12.
+2$:	UN.TOK
+	MOV	#TY.UNK, R1	; Assume undeclared identifier is func
+4$:	TST	R0
+	BNE	5$		; Function
+	NEG	R1		; L-Value
+5$:	PU.EXT
+EUNA.B:	BR	EUNA.A
+
+
+DEFARG:	PP.SYM
+	CK.TOK	T.RPAR
+EMSYM1:	CALL	FISYM1
+	ADC	(SP)		; (SP): 1 if defined(SYMBOL)
+EMSYM3:	POP	TOKVA0
+			; Fallthrough
+EMINT:	MOV	#TY.I, R5
+	.EMI	PU$16
+EM.SCR:	MOV	(PC)+, R1
+TOKVA0::.WORD
+EM.RET:	.EMIT
+	MOV	R5, R1
+	BR	ADDRO3		; PU.EXT; RETURN
+
+
+
+PODECR:	INC	R2		; R2: T.SUB&177
+POINCR:	PUSH	R2
+	CALL	INCR1
+	POP	R2
+	MOV	#3, R0
+	XOR	R0, R2		; R2: opposite Operation (T.SUB for ++)
+	.EMI	P$ONE
+	PU.TYI
+	BR	INCR8
+
+
+
+EMSYM:	TST	(PC)+
+IS.PP::	.WORD	0			; Preprocessor Mode ON (limited expressions)
+	BEQ	PAVAR
+	CLR	-(SP)			; All unexpanded symbols have value 0
+	CMP	SYNAM0, #^Rdef		; defined
+	BNE	EMSYM3
+	IF.CHR	'(, DEFARG
+	PP.SYM
+	BR	EMSYM1
+			; Fallthrough
+;; Read symbol without expansion
+;!!!R RRAWSY:	INCB	NO.EXP
+;!!!R 	G.SYM
+;!!!R 	CLRB	NO.EXP
+	;!!!R RETURN
+
+
+
+PNEG:	P.UNRV
+	MOV	#NEGTAB, R5
+	CMP	R1, #TY.FLT
+	BNE	BLNOT1
+	.EMI	F$NEG
+EUNA.C:	BR	EUNA.B
+
+
+LNOT:	.UNARY
+	CAST.B
+	.EMI	I$LNO
+	BR	EUNA.C
+
+
+BNOT:	ADD	#NOTTAB - T.NOT, R1
+	MOV	R1, R5
+	P.UNRV
+BLNOT1:	PUSH	R1
+	ASR	R1
+	CMP	R1, #TY.L/2
+	BEQ	2$
+	CAST.I
+	INC	R5
+2$:	CALL	EMIOF5
+UNAEND:	POP	R1		; the same type
+	BR	EUNA.C
+
+
+
+
+;; Parge unary argument
+PUNARY::G.TOK
+	MOV	#T.ADD&177, R2		; Used in INCR
+	switch
+	case	T.SYM	, EMSYM
+	case	T.LPAR	, LPAR
+	case	T.NOT	, BNOT		; ~
+	case	T.LNOT	, LNOT		; !
+	case	T.SUB	, PNEG		; -
+	case	T.ADD	, PUNARY	; +
+	case	T.AST	, DEREF		; *
+	case	T.INCR	, INCR		; ++
+	case	T.DECR	, DECR		; --
+	case	T.AND	, ADDROF	; &
+	case	T.LFLT	, EMFLT		; float literal
+.IIF NE C$DBL	case	T.LDBL	, EMDBL
+	case	T.LINT	, EMINT		; int literal
+	case	T.LLNG	, EMLNG		; long literal
+	case	T.SIZE	, SIZEOF
+	case	T.LSTR	, EMISTR	; string literal
+	default
+ERR.F:	.ERR
+
+
+
+
+
+
+SIZEOF:	MOV	RELOCS+2, R3
+	IF.TOK	T.LPAR, 1$		; (
+	MOV	TEXT+2, R2
+	.UNARY
+	BR	2$
+1$:	CALL	TYOREX
+	BCS	4$
+2$:	MOV	R2, TEXT+2
+	MOV	R3, RELOCS+2
+	PO.EXT
+	BPL	4$
+	NEG	R1
+4$:	SZ.TYP
+	MOV	R1, TOKVA0
+	CALL	EMINT
+	BR	EUNA.C
+
+EMLNG:	MOV	#TY.L, R5
+EMLNG1:	.EMI	PU$32
+EMLNG2:	MOV	(PC)+, R1
+TOKVA1::.WORD	0
+	.EMIT
+	BR	EM.SCR
+
+
+
+.IF NE C$DBL
+	.GLOBL PU$64
+EMDBL:	MOV	#TY.DBL, R5
+	.EMI	PU$64
+	MOV	(PC)+, R1
+TOKVA2::.WORD	0
+	.EMIT
+	MOV	(PC)+, R1
+TOKVA3::.WORD	0
+	.EMIT
+	BR	EMLNG2
+.ENDC ; C$DBL
+
+
+
+EMFLT:	MOV	#TY.FLT, R5
+	BR	EMLNG1
+
+
+
+DEREF:	P.UNRV
+DEREF1:	C.LVAL
+	EXTY.P
+	MOV	R1, (R4)
+RET.D:	RETURN
+
+
+DECR:	INC	R2		; R2: T.SUB&177
+INCR:	.UNARY
+INCR1:	CALL	DREAD
+	.EMI	P$ONE
+	PU.TYI
+	MOV	R1, R4
+	MOV	R2, R1
+	CALL	ARITH
+	MOV	#T.ASGN&177, R2
+	.EXTYP
+INCR8:	MOV	R1, R4
+	MOV	R2, R1		; R1: Token
+	JMP	ARITH		;!!!O
+
+EXPR.::	PUSH	(PC)+
+TSTKB::	.WORD	0		; Token Stack base
+	PUSH	#EXPR.2
+PBINAR::
+	MOV	SP, TSTKB
+PBINA1:	.UNARY
+PBINA4:	R.TOK
+	BEQ	11$
+	BIT	#TF.BIN, R1	;!!!O? Check sign bit
+	BEQ	3$
+	CMP	SP, TSTKB
+	BEQ	1$
+	MOV	R1, R0
+	SWAB	R0
+	CMPB	R0, 1(SP)
+	BLOS	3$		; Current operator has lower precedence
+1$:	MOV	R1, R2
+	switch
+	case	T.ASGN	, 2$
+	case	T.LAND	, 7$
+	case	T.LOR	, 8$
+	case	T.TERN	, TERNAR
+	default
+	BIT	#TF.ASG, R1
+	BEQ	5$
+	CALL	DREAD
+	BIC	#TF.ASG, R2
+	PUSH	#T.ASGN&177	; Zero precedence for right-associativity
+2$:	MOVB	R2, R2		; Convert to infix operator with Zero precedence for right-associativity
+	BR	10$
+
+
+;; &&
+7$:	CAST.B
+	EM.BEQ			; R1: cond branch's offset
+	BR	4$
+;; ||
+8$:	CAST.B
+	EM.BNE			; || R1: cond branch's offset
+4$:	PUSH	R1
+	EM.POP
+	BR	10$
+5$:	C.RVAL
+10$:	PUSH	R2
+	BR	PBINA1
+
+3$:	UN.TOK
+11$:	CMP	SP, TSTKB
+	BEQ	19$
+	C.RVAL
+	MOV	R1, R4	; R4: type
+	POP	R1
+	MOV	R1, R2
+	switch
+	case	T.LAND	, PANDOR
+	case	T.LOR	, PANDOR
+	default
+	CALL	GENBIN
+	BR	PBINA4
+19$:	TST	R1
+	BNE	RET.D
+	R.TOK
+	RETURN
+
+;; ?: - ternary
+TERNAR:	EM.POP
+	EM.BEQ			; R1: cond branch's offset
+	MOV	R1, R5		; R5: place
+	.PEXPR
+	C.RVAL
+	PO.EXT
+	MOV	R1, R2		; R2: first expression Type
+	CK.TOK	T.COLON
+	EM.JMP
+	PUSH	R1
+	MOV	R5, R1
+	EM.COF			; Fill  condition branch
+	.EXPR
+	C.RVAL
+	EXTY.P
+	MOV	(R4), R3	; R3: second expression Type
+	.SUBRC	COMTYP
+	CMP	R0, R3
+	BNE	1$		; cast second expression
+	EM.JMP
+	MOV	R1, R5		; R5: place
+	POP	R1
+	EM.COF
+	PUSH	R5
+	MOV	R2, (R4)
+1$:	MOV	R0, R1
+	.CAST
+	BR	PCOLON
+
+
+;; &&, ||
+PANDOR:	CAST.B
+		; Fallthrough
+;; : - ternary
+PCOLON:	POP	R1
+	EM.COF
+	BR	PBINA4
+
+EMISTR:	MOV	#TY.C, R1
+	PTR.OF
+	PU.EXT			; `char*` type
+	.EMI	PU$16
+			; Fallthrough
+EMSTR::	MOV	TEXT+2, R1
+	MOV	RDATA+2, R2
+	COM	R2		; Negative means RLD to .rdata
+	PUSH.D	RELOCS
+	.EMIT			; garbage
+EMSTR1:
+2$:	MOV	TMP, R2		; R2: pointer to allocated string
+	MOV	TMP+2, R4	; R4: Size, excluding terminating \0
+	BEQ	3$
+1$:	MOVB	(R2)+, R1
+	PUSH.B	RDATA
+	SOB	R4, 1$
+3$:	IF.TOK	T.LSTR, 2$	; concatenate adjacent strings
+	PU.BZ	RDATA		; Terminating \0
+	RETURN
+
+
+;; Emit code for modifying L-Value
+DREAD:	.EXTYP
+	BPL	ERR.D		; non L-Value
+	NEG	R1
+	PU.EXT
+	SZ.TYP
+	.EMI	$DRD
+EMRE:	.EMIT
+	RETURN
+
+
+INIPTR:	CMP	(R0)+, (R0)+
+	MOV	TEXT+2, R1
+	MOV	(R0), R2	; R2: Symbol
+        PUSH.D	RELOCS
+	MOV	-(R0), R1	; R1: Symbol Displacement
+	BR	EMRE		; .EMIT; RETURN
+
+
+;; R3: Variable Type
+GINVAL:	IF.TOK	T.LSTR, EMSTR
+	EV.CE
+	MOV	#$SCRAT, R0
+	CMP	R2, #TY.SYM
+	BEQ	INIPTR		; Pointer To Symbol
+	MOV	R3, R1
+	SZ.TYP
+	MOV	R1, R5
+2$:	MOVB	(R0)+, R1
+	PUSH.B	TEXT
+	SOB	R5, 2$
+	RETURN
+
+
+
+
+;; Function definition
+;; R4: Address of item in VARS
+;; R5: Aligned address in TEXT
+DEFUN:	MOV	R5, TEXT+2
+	MOV	R5, (R4)
+	INCB	IN.DEFN
+;	TST	(SP)+		; foo() {} is a complete form, no need for semicolon
+	MOV	#LOCALS+2, R3
+	TSTB	IS.STA
+	BNE	2$
+	CALL	DEFSYM
+;; Reverse LOCALS order: first parameter must be last
+2$:	MOV	(R3), R5	; MOV LOCALS+2, R5
+	BEQ	3$
+	MOV	-(R3), R4	; MOV LOCALS, R4
+	ADD	(R3)+, R5	; ADD LOCALS, R5
+1$:	MOV	-(R5), R2
+	MOV	2(R4), (R5)
+	MOV	-(R5), R1
+	MOV	(R4), (R5)
+	MOV	R1, (R4)+
+	MOV	R2, (R4)+
+	CMP	R4, R5
+	BLO	1$
+3$:	CLR	R1
+	MOV	#TY.I, R2	; Reserve 1 WORD for the Return Address
+	PUSH.D	LOCALS
+	MOV	(R3), LOCFUN	; MOV LOCALS+2, LOCFUN
+	.EMIT	004537		; JSR RT,
+	.EMIT	T$ENTR
+	UN.TOK
+	.STMT
+;; Link all `goto` with labels:
+LNGOTO:
+	MOV	GOTOS, R3
+1$:	SUB	#4, GOTOS+2
+	BMI	8$
+	MOV	(R3)+, R1
+	.FIND2	LABELS
+	BCC	BCCERR		; Undefined label
+	MOV	R2, R5		; R5: SP offset
+	MOV	R1, R2		; Target
+	MOV	(R3)+, R1	; TEXT-offset to place
+	EM.OFF
+	ADD	TEXT, R1
+	SUB	R5, -(R1)	; Adjust $GOTO argument for unwind offset
+	BR	1$
+8$:	.CLEAR	GOTOS
+	.CLEAR	LABELS
+	JMP	EMRET		; .EMIT T$RET; RETURN
+
+ERR.D:	.ERR
+
+
+;; Init Global char array by string literal
+GINSTR:	PUSH	#GDEF1
+GINST1:	PUSH	RDATA+2
+	CALL	EMSTR1
+	MOV	RDATA, R4
+	ADD	(SP), R4	; R3: Address of string
+	MOV	RDATA+2, R0
+	SUB	(SP), R0	; R0: string length including \0
+	SUB	R0, R5
+	BGE	1$
+	ADD	TYPES, R3
+	MOV	R0, 4(R3)	; Literal defines array size
+	CLR	R5
+1$:	MOVB	(R4)+, R1
+	PUSH.B	TEXT
+	SOB	R0, 1$
+	POP	RDATA+2
+	RETURN
+
+;; { "foo" }   array initialization
+GIBSTR:	POP	R3
+	CALL	GINST1
+	BR	COMAGG
+
+;; Global Array init
+;; R3: Type
+GINARR: IF.TOK	T.LSTR, GINSTR
+	JSR	R0, BEGAGG
+	PUSH	R3
+	MOV	R3, R1
+	IS.ARR			; R1: Element Type
+	MOV	R1, R3		; R3: Element Type
+	SZ.TYP
+	MOV	R1, R4		; R4: element size
+	CMP	R4, #1
+	BNE	5$
+	IF.TOK	T.LSTR, GIBSTR
+5$:	CLR	R2		; R2: #elements
+1$:	IF.TOK	T.RBRC, 2$
+	.GINI
+	INC	R2
+	SUB	R4, R5
+	BEQ	4$
+	IF.TOK	T.RBRC, 2$
+	CK.TOK	T.COMMA
+	BR	1$
+2$:	POP	R1		; Array Type
+	TST	R5
+	BPL	3$
+	ADD	TYPES, R1
+	MOV	R2, 4(R1)	; Literal defines array size
+3$:	BR	ONRBRC
+4$:	POP	R1		; Array Type
+;; Filled all items of the aggregation
+COMAGG:	TST	(SP)+
+	BNE	EAGGLV		;'{' not acquired
+	CK.TOK	T.RBRC
+	BR	EAGGLV
+
+;; Global typedef
+GTYPED:	PUSH	#PDECL0
+		; Fallthrough
+;; typedef
+TYPEDEF::
+	.TYPEP
+BCCERR:	BCC	ERR.D
+	MOV	R1, R3
+	INCB	IN.DEFN
+1$:	T.DCL
+	PUSH.D	TDEFS
+	IF.TOK	T.COMM, 1$
+	CLR	(PC)+
+IN.DEFN:.WORD	0		; 1: inside defun
+	RETURN
+
+GINSCT:	JSR	R0, BEGAGG
+	ADD	TYPES, R3
+	MOV	2(R3), R4	; Pointer to struct definition
+1$:	IF.TOK	T.RBRC, ONRBRC
+	TST	(R4)+
+	MOV	(R4)+, R3	; R3: Field Type
+	.GINI
+	MOV	R3, R1		; R1: Field Type
+	SZ.TYP
+	SUB	R1, R5		; R5: remained struct bytes
+	IF.TOK	T.RBRC, ONRBRC
+	TST	(R4)
+	BEQ	COMAGG
+	CK.TOK	T.COMMA
+	BR	1$
+
+
+;; End of struct of array
+;; Invoked by IF.TOK T.RBRC
+ONRBRC:	TST	(SP)+
+	BEQ	EAGGLV		; acquired '{'
+	UN.TOK
+EAGGLV:	DEC	AGGLV
+	BR	GDEF1
+
+
+;; R3: type
+GINI::	MOV	R3, R1
+   	SZ.TYP
+	MOV	R1, R5		; R5: sizeof variable
+	MOV	R3, R1
+	TY.CAT
+	MOV	R2, R1
+	switch
+	case	TC.SCA	, GINVAL
+	case	TC.PTR	, GINVAL
+	case	TC.ARR	, GINARR
+	case	TC.SCT	, GINSCT
+	default
+	.ERR	9.
+
+;; Process top-level definition
+GDEF::	CLR	LOCALS+2
+	T.DCL			; R2: actual type
+	MOV	R1, R3		; R1: Symbol
+	MOV	R2, R1
+	MOV	TEXT+2, R5
+	INC	R5
+	BIC	#1, R5		; Align global var to even address
+	IS.FUN
+	BEQ	DFUN
+	MOV	R3, R1
+	PUSH.D	VARS
+	TSTB	IS.EXT
+	BNE	GNDEF		; extern
+	MOV	R5, TEXT+2
+	MOV	R5, R1
+	PUSH.W	VARS		; Offset in TEXT
+	MOV	R2, R3		; R3: type (used in INIVAL)
+	CALL	DEFSYM
+	IF.TOK	T.ASGN, GINI
+	MOV	R2, R1		; R1: Type
+	SZ.TYP
+	MOV	R1, R5		; R5: sizeof variable
+GDEF1:	DEC	R5
+	BMI	RET.G
+	PU.BZ	TEXT
+	BR	GDEF1
+
+DFUN1:	PUSH.D	VARS		; Offset in TEXT
+	CALL	GNDEF		; Offset in TEXT is undefined yet
+				; Find again
+DFUN:	MOV	R3, R1
+	.FIND2	VARS
+	BCC	DFUN1		; Add declaration to VARS
+	IF.TOK	T.LBRC, DEFUN
+	RETURN
+
+PDECL0:	CK.TOK	T.SEMI		; Check for ';'
+;; Parse top-level decls
+PDECLS::
+	CLR	(PC)+
+IS.STA::.WORD	0		; Static declaration
+	CLRB	(PC)+
+IS.EXT::.WORD	0		; Extern declaration
+PDECL1:	R.TOK
+	BEQ	RET.G
+	CLR	R2
+	switch
+	case	T.TYPE	, GTYPED
+	case	T.EXTE	, EXTERN
+	case	T.STAT	, STATIC
+	default
+	.TYPP2
+	BCC	BCCERR
+	MOV	R1, (PC)+
+CURTYP::.WORD	0		;!!!? Type of multiple variables declarations
+	MOV	R1, R3
+	IF.TOK	T.SEMI, PDECLS	; enum/struct definition without vars
+2$:	.SUBRC	GDEF
+	ASRB	IN.DEFN
+	BCS	PDECLS
+	IF.TOK	T.COMM, 2$
+	BR	PDECL0
+
+
+GNDEF:	MOV	#-1, R1
+	PUSH.W	VARS		; Offset in TEXT
+RET.G:	RETURN
+
+
+
+EXTERN:	INCB	IS.EXT
+	BR	PDECL1
+
+STATIC:	INCB	IS.STA
+	BR	PDECL1
+
+
+
+.RDATA
+
+NOTTAB:	.BYTE	BNOT$L, BNOT$I, LNOT$L, LNOT$I
+NEGTAB:	.BYTE	NEG$L, NEG$I
+
+
+
+
+
+
+.END

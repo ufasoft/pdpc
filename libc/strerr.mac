@@ -1,0 +1,41 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	STRERR
+
+.INCLUDE /macros.inc/
+
+.PSECT	.text
+
+;; char* strerror(int errnum)
+strerror::
+	CMP	R1, #25.
+	BLO	1$
+	MOV	#-1, R1
+1$:	MOVB	OFFS+1(R1), R0
+	ADD	#M.BASE, R0
+	RETURN
+
+.RDATA
+
+M.UNK:	.ASCIZ	"Unknown error"
+M.SUCC:	.ASCIZ	"No error"
+M.PERM:	.ASCIZ	"Operation not permitted"
+M.BASE:
+M.IO:	.ASCIZ	"I/O error"
+M.BADF:	.ASCIZ	"Bad file descriptor"
+M.NOENT:.ASCIZ	"No such file"
+M.NOMEM::.ASCIZ	"Out of memory"
+M.INVAL:.ASCIZ	"Invalid argument"
+M.MFILE:.ASCIZ	"Too many open files"
+
+OFFS:	.SBYTE	M.UNK-M.BASE	, M.SUCC-M.BASE	, M.PERM-M.BASE	, M.NOENT-M.BASE, M.UNK-M.BASE	, M.UNK-M.BASE
+	.SBYTE	M.IO-M.BASE	, M.UNK-M.BASE	, M.UNK-M.BASE	, M.UNK-M.BASE	, M.BADF-M.BASE	, M.UNK-M.BASE
+	.SBYTE	M.UNK-M.BASE	, M.NOMEM-M.BASE, M.UNK-M.BASE	, M.UNK-M.BASE
+	.SBYTE	M.UNK-M.BASE	, M.UNK-M.BASE	, M.UNK-M.BASE	, M.UNK-M.BASE
+	.SBYTE	M.UNK-M.BASE	, M.UNK-M.BASE	, M.INVAL-M.BASE, M.UNK-M.BASE	, M.UNK-M.BASE	, M.MFILE-M.BASE
+
+
+.END

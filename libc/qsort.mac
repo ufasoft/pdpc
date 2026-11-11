@@ -1,0 +1,56 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	QSORT
+
+.INCLUDE /macros.inc/
+
+.PSECT	.text
+
+QSORT1:
+	PUSH	R2		; (SP): count - 1
+	PUSH	R1
+	MOV	R2, R5
+	MUL	R3, R5
+	ADD	R1, R5
+	CLR	-(SP)		; i
+	MOV	R5, R2		; R2: points to high
+	MOV	R1, R5		; A + i
+1$:	MOV	R4, 2$+2
+2$:	.SUBRC	0		;SELF-MOD
+	BGT	4$
+	MOV	R3, R0
+3$:	MOVB	(R1), -(SP)	; swap(A[i], A[j])
+	MOVB	(R5), (R1)+
+	MOVB	(SP)+, (R5)+
+	SOB	R0, 3$
+	INC	(SP)		; ++i
+	SUB	R3, R1
+4$:	ADD	R3, R1
+	CMP	R1, R2
+	BLE	1$
+
+	MOV	R3, R0
+6$:	MOVB	(R5), -(SP)	; swap(A[i], A[high])
+	MOVB	(R2), (R5)+
+	MOVB	(SP)+, (R2)+
+	SOB	R0, 6$
+
+	POP	R2, R1
+	.SUBRC	qsort
+
+	MOV	R5, R1
+	SUB	(SP)+, R2
+	NEG	R2
+			; Tail call
+;; void qsort(void* ptr, size_t count, size_t size, int (*comp)(const void*, const void*))
+qsort::
+	DEC	R2
+	BGT	QSORT1
+	RETURN           	; Sorted already
+
+
+.END
+

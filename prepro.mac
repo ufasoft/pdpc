@@ -1,0 +1,797 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	PREPRO
+
+
+.INCLUDE /ccmacr.inc/
+
+.GLOBL	IS.PP, TEXT, RMODE, IS.OPE, BNDARG, NARGS, RTOK, NO.EXP, ASCII, BINDS, TMP, MEMSTM, EXPANS, REBIND, CURARG
+.GLOBL	INTOK, ERREXI
+.GLOBL	RE
+
+
+.PSECT
+
+;;	struct InputFile {
+;;	    InputFile *next;
+;;          FILE*    file;
+;;	    char*    name;
+;;	    unsigned line;
+;;	};
+
+;;	struct MemoryStream {
+;;	    MemoryStream *next;
+;;	    char* cur;
+;;	    int macro;
+;;	    char[] Expanded;
+;;	};
+
+
+
+
+;; Move contents of TMP to R1 and clean TMP
+TMP2R1::MOV	#TMP, R2
+TMP2RA::MOV	(R2), R1
+	CLR	(R2)+
+	CLR	(R2)+
+	RETURN
+
+
+
+;; Define preprocessor symbol
+;; R1: name as ASCII
+;; R2: value as ASCII
+;; Returns: R0: pointer after definition
+PPDEF::	MOV	#5, R4
+	.strlen
+	ADD	R0, R4
+	MOV	R1, R2
+	MOV	R2, R1
+	.strlen
+	ADD	R0, R4
+	MOV	R4, R1
+	.CALLOC
+	MOV	(PC)+, (R0)
+PPCUR::	.WORD	LINE
+	MOV	R0, PPCUR
+	TST	(R0)+
+1$:	MOVB	(R3)+, (R0)+
+	BNE	1$
+	CLR	(R0)+		; No parameters
+2$:	MOVB	(R2)+, (R0)+
+	BNE	2$
+	RETURN
+
+
+
+;; #define
+DEFINE: MOV	#TMP+2, R3
+	MOV	#2, (R3)	; TMP+2 = 2
+	PP.SYM
+	PUSH.S	TMP
+	CLR	R4		; Count of args (-1: Parameterless macro)
+	MOV	(R3), R5	; offset to arg count
+	INC	(R3)		; Skip space for arg count
+	IF.CHR	'(, 3$
+	DEC	R4
+;; Copy definition
+2$:	R.LCHR
+	BEQ	1$
+	.isspace
+	BNE	2$
+	BR	1$
+6$:	R.LCHR
+1$:	PUSH.B	TMP
+	BNE	6$
+	ADD	-(R3), R5	; R5 += TMP: address of arg count
+	MOVB	R4, (R5)	; Save arg count
+	.SHRINK	TMP
+	CALL	TMP2R1
+	LS.INS	PPCUR
+	POP	IS.OPE
+	BR	SKRES2
+7$:	MOV	#VAARGS, R1
+	BR	5$
+4$:	MOV	ASCII, R1
+5$:	INC	R4
+	PUSH.S	TMP
+	IF.TOK	T.RPAR, 2$
+	CK.TOK	T.COMM
+3$:	G.TOK
+	switch
+	case	T.SYM	, 4$
+	case	T.RPAR	, 2$
+	case	T.3DOT	, 7$
+	default
+ERR.A:	.ERR
+
+
+
+
+;-- Low bit does matter
+$IFNDEF	= 0
+$IFDEF	= 1
+;--
+$DEFINE	= 2
+$UNDEF	= 3
+$IF	= 4
+$ELSE	= 5
+$ELIF	= 6
+$ENDIF	= 7
+$INCLUDE = 10
+$ERROR	= 11
+
+
+
+;; #symbol
+;; INPUT:
+;;   R3: #IS.OPE
+;;   R4: #CNDMOD
+PPDIR:: PUSH	(R3)		; PUSH IS.OPE
+	CLR	(R3)		; CLR IS.OPE
+	INCB	IS.PP
+	INCB	NO.EXP
+	PP.SYM
+	MOV	SYNAM0, R1
+	F.WORD
+	.RAD50	"ifn""ifd""def""und""if ""els""eli""end""inc""err"<0>
+	BCC	SKREST		; Unknown directive
+	MOV	#FLSLV, R3
+	MOV	#CNDMSK, R5
+	switch
+	case	$IF	, PIF
+	case	$IFDEF	, IFDEF
+	case	$IFNDEF	, IFDEF
+	case	$ENDIF	, ENDIF
+	default
+	TST	(R3)		; TST FLSLV
+	BNE	SKREST
+	switch
+	case	$ELSE	, ELSE
+	case	$ELIF	, ELIF
+	default
+	TST	(R4)		; TST CNDMOD
+	BNE	SKREST		; Skip rest of line if the Condition is False
+	switch
+	case	$DEFINE	, DEFINE
+	case	$UNDEF	, UNDEF
+	case	$INCLUDE, INCLUDE
+;	case	$EMBED	, EMBED
+	default
+;; #error
+PERR:	DEC	ASCII + 2	; Clear terminating '\0'
+	MOV	stderr, R2
+	MOV	#'#, R1
+	.fputc
+1$:	R.LCHR
+	BNE	1$
+	MOV	#C.NL, R1
+	PUSH.B	ASCII
+	.UNGET
+	PU.BZ	ASCII
+	MOV	ASCII, R1
+	.fputs
+	.ERR	3
+
+ENDIF:	TST	(R3)		; TST FLSLV. CF=0
+	BEQ	2$		; Active level
+	INC	(R3)		; INC FLSLV
+	BNE	SKREST
+	ROR	(R5)		; Equivalent of TST (R5)
+2$:	ROL	(R5)		; ASL CNDMSK
+	BR	IFT.1
+
+
+
+;; #else
+ELSE:	CLR	(R4)		; CNDMOD = True
+   	TST	(R5)		; TST CNDMSK
+	BMI	SKREST
+FALS:	DEC	(R3)		; Don't consider following `else`s or `elif`s
+	ASL	(R5)		; ASL CNDMSK
+	MOV	SP, (R4)	; CNDMOD = False
+;; Skip rest of line
+SKREST:	POP	IS.OPE
+SKRES1:	R.LCHR			; Return from a Directive
+	BNE	SKRES1
+SKRES2:	CLR	NSLINE
+	CLRB	NO.EXP
+	CLRB	IS.PP
+TOKR::	.CLEAR	ASCII
+	MOV	#ASCII+2, R5
+	ASR	(PC)+
+HAS.TO::.WORD	0		; Flag we have next token
+	BCC	HASTO1
+	MOV	(PC)+, -(R5)	; MOV	SV.ASC, ASCII
+SV.ASC::.WORD	0		; ASCII of previous token
+	MOV	(PC)+, R1
+NX.TOK::.WORD	0		; Next token
+	RETURN
+HASTO1:	TST	(PC)+
+NSLINE::.WORD	0		; Non-space Line
+	BNE	J.RTOK
+	CLR	INTOK
+TOKR2:	MOV	#IS.OPE, R3
+	R.CHR
+	BEQ	RE.TSP
+	MOV	#CNDMOD, R4
+	switch
+	case	C.NL	, RE.TSN
+	case	'#	, PPDIR
+	default
+	.isspace
+	BNE	TOKR2
+	INC	NSLINE
+	TST	(R4)		; TST CNDMOD
+	BNE	SKRES1		; Skip rest of line
+	.UNGET
+	TST	(R3)		; TST IS.OPE
+	BEQ	J.RTOK
+	TST	(R5)		; TST ASCII+2
+	BNE	RETSP1
+J.RTOK:	JMP	RTOK		;!!!O
+RE.TSN:	TSTB	IS.PP
+	BEQ	TOKR2
+	.UNGET		;!!!?
+CLRR1R:	CLR	R1
+	RETURN
+RE.TSP:	TST	(R3)		; TST IS.OPE
+	BEQ	RET.D
+	TST	(R5)		; CLR ASCII+2
+	BEQ	RET.D
+	TSTB	@-(R5)
+	BEQ	RET.D		; TSTB @ASCII
+RETSP1:	PU.BZ	ASCII
+	MOV	#T.SP, R1
+RET.D:	RETURN
+
+INCLUDE:CLRB	NO.EXP
+	IF.TOK	T.LSTR, 3$
+	CK.TOK	T.LT
+	CLR	TMP + 2
+1$:	R.LCHR
+	BEQ	ERR.O
+	CMPB	R1, #'>
+	BEQ	2$
+	PUSH.B	TMP
+	BR	1$
+2$:	PU.BZ	TMP
+3$:	CALL	TMP2R1
+	CALL	OPNINP
+	BNE	INCLU9
+	PUSH	R1
+	MOV	#SYDEV, R1
+	PUSH.S	TMP
+	DEC	TMP+2
+	MOV	(SP), R1
+	PUSH.S	TMP
+	POP	R1
+	.free
+	CALL	TMP2R1
+	CALL	OPNINP
+	BNE	INCLU9
+	JMP	ERREXI
+INCLU9:	POP	IS.OPE
+	BR	SKRES2
+
+
+;; R1[0]:0 #ifndef
+;; R1[0]:1 #ifdef
+IFDEF:	TST	(R4)		; TST CNDMOD
+	BNE	IF.A		; Inactive, increment nested level
+	MOV	R1, R5
+	CALL	FISYM		;!!!O?  .SUBR FISYM
+	ADC	R5		; Low bit of R5 = R5 ^ CF
+	ROR	R5
+IF2:	ROR	(PC)+
+CNDMSK:	.WORD	0		;SELF-MOD Condition results. Bit 15 is current.  0: true, 1: false
+IFT.1:	SXT	(PC)+
+CNDMOD:	.WORD	0		;SELF-MOD bool, Current condition state. 0: true, non 0: false
+SKRE.C:	BR	SKREST
+
+
+
+;; #elif
+ELIF:	TST	(R5)		; TST CNDMSK
+	BPL	FALS		; after active part
+	ASL	(R5)		; ASL CNDMSK
+IF1:	PUSH	#IF2
+;; Eval integer constant expression in #if
+;; Returns: CF=0 on true
+;;!!! Similar code in CIE.EV
+;!!!R	MOV	#TEXT+2, R5
+;!!!R	PUSH	(R5)		; Save TEXT size
+	INC	NSLINE		;!!!?
+	CLRB	NO.EXP
+	EV.CIE
+
+;!!!?	CLRB	IS.PP
+
+	CLC
+	BNE	RET.B
+	BR	SEC.RE		; SEC; RETURN
+
+
+CHR.R::	PUSH	#RE
+;; Read char, converts comments to space
+NEXTD::	MOV	#'/, R0
+NEXTB::	.NEXTC
+	BEQ	RET.E
+	TST	MEMSTM
+	BNE	NEXTB9		; defines are free from comments
+	CMPB	R1, R0
+	BNE	NEXTB9
+	TST	(PC)+
+INTOK::	.WORD	0		; In process of Token reading after first char is read
+	BEQ	1$
+	.UNGE2
+	BR	CLRR1R		; CLR R1; RETURN
+1$:	.NEXTC
+	switch
+	case	'/	, 6$
+	case	'*	, 7$
+	default
+	.UNGET
+	MOV	R0, R1		; R1: '/
+	BR	NEXTB9
+6$:	.NEXTC
+	BEQ	NEXTB9
+	CMP	R1, #C.NL
+	BNE	6$
+	BR	NEXTB9
+
+7$:	.NEXTC			; Skip comment
+8$:	CMPB	R1, #'*
+	BNE	7$
+	.NEXTC			; Skip comment
+	CMPB	R1, #'/
+	BNE	8$
+	MOV	#C.SP, R1	; Return comment as SP
+NEXTB9:	PUSH.B	ASCII
+RET.E:	RETURN
+
+
+;; #undef
+UNDEF:	CALL	FISYM
+	BCC	SKRE.C
+	MOV	-(R1), (R3)	; Unlink
+	.free
+	BR	SKRE.C
+
+
+;; #if cond
+PIF:	TST	(R4)		; TST CNDMOD
+	BEQ	IF1		; Nesting Level 1
+IF.A:	DEC	(R3)		; DEC FLSLV
+	BMI	SKRE.C
+ERR.O:	.ERR
+
+
+;; Find symbol
+;; Returns:
+;;  if found: CF: 1, R1: address of symbol name
+;;  else: CF: 0, R1: 0
+;;  R3: pointer to prev pointer
+FISYM::	PP.SYM
+FISYM1::MOV	#$SCRAT, R2
+	MOV	#PPCUR+2, R1
+1$:	MOV	R1, R3
+	MOV	-(R3), R1
+	BEQ	CLC.RE
+	TST	(R1)+
+	.strcmp
+	BNE	1$
+SEC.RE:	SEC
+RET.B:	RETURN
+CLC.RE:	CLC
+	RETURN
+
+
+
+
+
+
+
+;; R1: filename
+OPNINP::MOV	#RMODE, R2
+	.fopen
+	BEQ	RET.A
+	PUSH	R0
+	.CALLOC	8.
+	MOV	R0, R4
+	MOV	(PC)+, (R4)+	; next
+CURINP::.WORD	0		;SELF-MOD InputFile
+	MOV	R0, CURINP
+	POP	(R4)+	; file
+	MOV	R1, (R4)+	; name
+	INC	(R4)		; lin = 1
+RET.A:	RETURN
+
+
+
+;; INPUT: ASCII: read symbol, R4: param list
+;; Returns: R1, R3: expansion of the arg or 0
+EXPARG:	CLR	R3
+	MOV	BINDS, R5
+	BEQ	8$
+	MOV	R4, R1
+	MOV	ASCII, R2
+1$:	MOVB	(R1), R3
+	BEQ	8$		; End of param list
+	MOV	(R5)+, R3
+	ADD	#6, R3
+	.strcmp
+	BEQ	8$
+2$:	TSTB	(R1)+		; Skip arg name
+	BNE	2$
+	BR	1$
+8$:	MOV	R3, R1
+RET.C:	RETURN
+
+
+;;!!!TODO: incline in TRYEXP
+;; Expand macro in MEMSTM into TMP
+;; R4: param list
+;; Returns malloced expansion in R0
+EXPAND::
+	PUSH	CURINP
+	CLR	CURINP
+	INCB	NO.EXP
+	INC	IS.OPE
+;!!!?	INC	IS.INV
+	CLR	-(SP)		; (SP): EXPANS len after non-space
+1$:	R.TOK
+	BEQ	8$
+2$:	switch
+	case	T.SH	, 5$	; #
+	case	T.SHSH	, 12$	; ##
+	case	T.SYM	, 4$
+	default
+	PUSH	R1
+3$:	MOV	ASCII, R1
+7$:	PUSH.S	EXPANS
+	DEC	EXPANS+2
+	CMP	(SP)+, #T.SP
+	BEQ	1$
+	MOV	EXPANS+2, (SP)
+	BR	1$
+
+;; ##
+12$:	MOV	(SP), EXPANS+2
+11$:	G.TOK
+	CMP	R1, #T.SP
+	BEQ	11$
+	BR	2$
+
+4$:	PUSH	R1
+	CALL	EXPARG
+	BEQ	3$
+	BR	7$
+5$:	PP.SYM
+	CALL	EXPARG
+	BEQ	ERR.O
+	MOV	#'", R1
+6$:	PUSH.B	EXPANS
+	MOVB	(R3)+, R1
+	BNE	6$
+	MOV	#'", R1
+	PUSH.B	EXPANS
+	BR	1$
+
+	;!!!R MOV	(SP), R1
+	;LS.DEL	PPCUR
+
+	;; Expand body
+
+8$:	TST	(SP)+		; Discard EXPANS len
+	PUSH.B	EXPANS
+	;POP	R1
+	;LS.INS	PPCUR
+	POP	CURINP
+	CLR	NO.EXP
+;!!!	DEC	IS.INV
+	DEC	IS.OPE
+
+;; Clear args pointers in BINDS
+	MOV	#BINDS+2, R3
+	MOV	(R3), R2
+	ADD	-(R3), R2
+10$:	CMP	R2, (R3)	; CMP R2, BINDS
+	BEQ	RET.C
+	MOV	-(R2), R1
+	.FREE
+	BR	10$
+
+
+;; Search $SCRAT symbol in PPCUR and if found, expand it
+;; Return: ZF=1 if there is no definition
+TRYEXP::CALL	FISYM1		; R2: #$SCRAT
+	BCC	RET.C
+	SV.VEC	BINDS
+	PUSH	#REBIND		; RE.VEC BINDS; RETURN
+	MOV	CURINP, R5
+	CMP	R1, $AHEAP
+	BHIS	2$
+	MOV	R1, R3
+;!!!R	BIC	#200, R1
+	switch
+	case	LINE+2	, 6$
+	case	FILE+2	, 5$
+	case	DATE+2	, 11$
+	default
+;!!!R	MOV	R3, R1
+2$:	TSTB	(R1)+		; Skip Symbol name
+	BNE	2$
+	TSTB	(R1)+
+	BMI	TRYEX8		; parameterless macro
+	MOV	R1, R4
+	IF.CH	'(, TRYEX3	; Don't use IF.TOK to avoid double UN.TOK
+	SEZ			; Macro with parameters is ignored without '('
+	RETURN
+
+
+11$:	;PUSH	R1		; __DATE__
+	MOV	#$SCRAT+16., R1
+	.SUBRC	time
+	.SUBRC	gmtime
+	MOV	R0, R4
+	MOV	R2, R1
+	MOV	#14., R2
+	MOV	#FMTDAT, R3
+	.SUBRC	strftime
+	;POP	R1
+	BR	TRYEX8
+
+6$:	MOV	6(R5), R1	; __LINE__
+	MOV	#10., R3
+	.SUBRC	itoa
+7$:	MOV	R2, R1
+
+5$:	MOV	R2, R1		; __FILE__
+	MOV	#'", (R1)
+	MOV	4(R5), R2	; InputFile.name
+	.strcat
+	MOV	#DQUOT, R2
+	.strcat
+TRYEX8:	PUSH	R1
+	.CLEAR	TMP
+	MOV	MEMSTM, R1
+	PUSH.D	EXPANS		; next
+	MOV	R4, R1		;!!!? macro
+	PUSH.W	EXPANS
+	CLR	R1
+	PUSH.D	TMP		; next
+	MOV	R4, R1		;!!!? macro
+	PUSH.W	TMP
+	POP	R1		; R1: body of #define
+	PUSH.S	TMP
+	MOV	#TMP, R2
+	CALL	TRYEX1
+	CALL	EXPAND
+ASMSTM::MOV	#EXPANS, R2
+TRYEX1:	CALL	TMP2RA
+	MOV	R1, MEMSTM
+	ADD	#6, R1
+	MOV	R1, -4(R1)
+	RETURN
+
+TRYEX3:	MOV	R4, R1
+	MOVB	-1(R1), NARGS
+	BNE	2$
+	DEC	R4		; Empty parameter list must be NUL-terminated
+	CLR	BINDS+2
+	PUSH	R1
+	IF.CH	'), 1$
+	.ERR	5
+1$:	POP	R1
+	BR	TRYEX8
+2$:	PUSH	#TRYEX8
+		; Fallthrough
+;; Bind args
+;; INPUT:  R1: optional parameter list, or NULL
+;; OUTPUT:
+;;   R1: points to macro body
+;;   R4: original parameter list
+BNDARG::MOV	#IS.OPE, R3
+	PUSH	(R3)
+	SV.VEC	CURARG
+	CLR	(R3)
+	MOV	R1, R4
+	BNE	1$
+	INC	(R3)
+1$:	MOV	R1, R3
+	CLR	BINDS+2		;!!!?R
+BNDAR1:	CLR	R5		; Low byte: Parenthesis count, High byte: Variable-length Arg flag
+	DEC	(PC)+
+NARGS::	.WORD	0		; Number of mandatory args if ... is present
+	BPL	12$
+	MOV	#400, R5	; Set VA-flag
+12$:	PUSH.W	CURARG, 0						;!!!O
+	MOV	#6, CURARG+2	; sizeof(struct MemoryStream)
+2$:     TST	IS.OPE
+	BEQ	10$
+18$:	G.TOK
+	switch
+	case	T.LPAR	, 6$
+	case	T.LBRC	, 6$
+	case	T.BRA	, 6$
+	case	T.RPAR	, 4$
+	case	T.RBRC	, 4$
+	case	T.KET	, 4$
+	case	T.COMM	, 7$
+	default
+19$:	MOV	ASCII, R1
+	PUSH.S	CURARG
+	DEC	CURARG+2	; Remove '\0'
+	BR	18$
+
+24$:	CMPB	R1, #'\
+	BNE	3$
+	PUSH.B	CURARG
+	G.CHR
+3$:	PUSH.B	CURARG
+	G.CHR
+	CMPB	R1, R2
+	BNE	24$
+5$:	TST	IS.OPE
+	BNE	19$
+	PUSH.B	CURARG
+10$:	G.CHR
+	MOV	R1, R2		; R2: copy of read char
+	switch
+	case	'(	, 6$
+	case	')	, 4$
+	case	''	, 3$
+	case	'"	, 3$
+	case	C.COMM	, 7$
+	default
+	BR	5$
+
+
+15$:	TSTB	IS.PP
+	BNE	5$
+6$:	INCB	R5
+	BR	5$
+;; )
+4$:	DECB	R5
+	BPL	5$		; Nested parenthesis
+20$:	MOV	R4, R1
+	BEQ	22$
+	TSTB	-(R1)
+	BEQ	22$		; No parameters
+16$:	TSTB	(R3)+
+	BNE	16$
+22$:	PUSH	#23$
+	BR	8$
+23$:	RE.VEC	CURARG
+	POP	IS.OPE
+	BR	RET.R3
+
+;; ,
+7$:	TSTB	R5
+	BNE	5$
+	MOV	R3, R2
+	BEQ	13$
+	MOV	#VAARGS, R1	; __VA_ARGS__ parameter for ...
+	.strcmp
+	BNE	17$
+	MOV	#C.COMM, R1
+	BR	5$
+17$:	TST	R3
+	BEQ	13$
+11$:	TSTB	(R3)+
+	BNE	11$
+13$:	PUSH	#BNDAR1
+8$:	PU.BZ	CURARG
+	MOV	#CURARG, R2
+	CALL	TMP2RA
+	PUSH.W	BINDS
+	TST	(R1)+		; Fill Stream structure
+	MOV	R1, (R1)
+	ADD	#4, (R1)
+RET.R3:	MOV	R3, R1
+	RETURN
+
+FROMF1:	INC	6(R5)		; InputFile.line++
+			; Fallthrough
+;; Read from file
+FROMFI:	TST	(PC)+
+IS.INV::.WORD	0			; Function argument parsing mode
+	BEQ	2$
+	CLR	R1
+	RETURN
+2$:	CLR	R1
+	MOV	CURINP, R5
+	BEQ	9$		; End of input
+	MOV	2(R5), R1	; R1: FILE*
+	MOV	#C.NL, R4
+1$:	.fgetc
+	BLE	8$		; EOF or `\0`
+	CMPB	R0, #'\
+	BEQ	4$
+	MOV	R0, R1
+	CMPB	R0, R4
+	BNE	9$		; != '\n'
+	INC	6(R5)		; InputFile.line++
+	CLR	NSLINE
+	BR	6$
+
+;; Backslash handler
+4$:	MOV	R0, R3		; R3: '\\'
+	.fgetc
+	BLE	8$		; EOF or `\0`
+	CMPB	R0, R4
+	BEQ	FROMF1		; Ignore "\\\n" sequence
+	MOV	R1, R2		; R2: FILE*
+	MOV	R0, R1		; R1: read char
+	CALL	ungetc		; Don't use .UNGET because it modifies ASCII
+	BR	RET.R3		; Return '\\'
+
+8$:	.fclose
+	MOV	(R5), CURINP	; next InputFile
+	MOV	R5, R1
+	.free			; free(InputFile)
+6$:	MOV	R4, R1		; R1: '\n'
+9$:	RETURN
+
+NEXTC1:	MOV	(R4), MEMSTM	; next MemStream
+;!!!R	TSTB	(PC)+
+;IS.ARG::.WORD	0	; 1: parsing
+;	BNE	2$
+;	MOV	4(R4), R1
+;	LS.INS	PPCUR		; Re-enable current macro
+;2$:
+	MOV	R4, R1
+	.free
+NEXTCH::MOV	MEMSTM, R4
+	BEQ	FROMFI
+	MOVB	@2(R4), R1	; R1 = *cur
+	BEQ	NEXTC1
+	INC	2(R4)		; ++cur
+	RETURN
+
+
+
+.RDATA
+
+.EVEN
+
+;; Predefined preprocessor symbols
+;;  __pdp11__
+;;  _PDPC
+PDP11:	.WORD	0
+	.ASCIZ	"__pdp11__"<0><-1>"40"
+	.EVEN
+BKC:	.WORD	PDP11
+	.ASCIZ	"_PDPC"<0><-1>"20260"
+	.EVEN
+DATE:	.WORD	BKC
+	.ASCIZ	"__DATE__"
+	.EVEN
+FILE:	.WORD	DATE
+	.ASCIZ	"__FILE__"
+	.EVEN
+LINE:	.WORD	FILE
+	.ASCIZ	"__LINE__"
+
+DQUOT:	.ASCIZ	/"/
+
+
+FMTDAT:	.ASCIZ	/"%b %d %Y"/
+
+VAARGS::.ASCIZ	"__VA_ARGS__"
+
+
+SYDEV:	.ASCIZ	"SY:"
+
+
+.PSECT	.bss
+
+.EVEN
+
+FLSLV:	.WORD	0		; (Negative) Level of nesting inside false .IF branch
+
+.END

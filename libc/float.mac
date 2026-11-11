@@ -1,0 +1,59 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+;; Float conversions
+.TITLE	FLOAT
+
+.INCLUDE /macros.inc/
+
+.PSECT	.text
+
+;; (float)int
+I$F::	CLR	-(SP)
+	MOV	2(SP), R1
+	BGT	1$
+	BEQ	4$
+	NEG	R1
+1$:	ROL	-(SP)		; set sign
+	MOV	#221, R2	; exponent
+	CLRB	4(SP)
+2$:	DEC	R2
+	ROL	R1
+	BCC	2$
+	MOVB	R1, 5(SP)
+	CLRB	R1
+	BISB	R2, R1
+	SWAB	R1
+	ROR	(SP)+
+	ROR	R1
+	RORB	3(SP)
+	MOV	R1, (SP)
+4$:	.NEXT
+
+
+;; R2:R3 *= 5
+$MUL5:: PUSH	R2, R3
+	ASHC	#2, R2
+	ADD	(SP)+, R3
+	ADC	R2
+	ADD	(SP)+, R2
+	RETURN
+
+;; R2:R3 /= 5
+;; ++R4
+$DIV5::	MOV	R2, R1
+	CLR	R0
+	DIV	#5, R0
+	MOV	R1, R2
+	DIV	#5, R2
+	MOV	R2, R3
+	MOV	R0, R2
+	INC	R4
+	RETURN
+
+
+
+
+.END

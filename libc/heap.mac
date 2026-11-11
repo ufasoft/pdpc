@@ -1,0 +1,180 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	HEAP
+
+.REM &
+
+Heap Structure
+
+Free Block:
++----------------------------------+
+| Pointer to next Free Block       |
++----------------------------------+
+| Size in bytes including header   |
++----------------------------------+
+
+Used Block:
++----------------------------------+
+| Size in bytes excluding header   |
++----------------------------------+
+
+&
+
+.INCLUDE /macros.inc/
+
+.GLOBL $AHEAP, $FREEL, $EHEAP
+
+.PSECT	.text
+;.ASECT
+;. = 21000
+
+MALLO3:	MOV	R2, R1
+;; void *malloc(size_t size)
+malloc::
+	INC	R1
+	BIC	#1, R1		; Round up to word alignment
+	BEQ	RET.A
+	MOV	R1, R4		; R4: size without header
+	TST	(R1)+		; Reserve for "Used Block" header
+MALL1:	MOV	#$FREEL, R0
+1$:	MOV	R0, R3		; prev
+	MOV	(R3), R0
+	BEQ	5$
+	MOV	2(R0), R2	; R2: cur block size
+	SUB	R1, R2		; R2: remainder space
+	BLO	1$
+	CMP	R2, #4
+	BLO	3$
+	ADD	R1, (R3)
+	MOV	(R3), R1	; R1: next free block
+	MOV	(R0)+, (R1)+
+	MOV	R2, (R1)
+	BR	4$
+3$:	MOV	(R0)+, (R3)	; Unlink entire block
+	MOV	(R0), R4
+	TST	-(R4)
+4$:	TST	-(R0)
+	BR	6$
+;; Request more memory from OS
+5$:	MOV	$EHEAP, R3
+	MOV	R3, R2
+	ADD	R1, R2
+	BCS	8$
+	.SETTOP	R2
+	MOV	R0, $EHEAP	; $EHEAP = settop
+	CMP	R0, R2
+	BLO	7$		; Not enough memory
+	SUB	R1, R0		; R0: address of the new allocated header
+6$:	MOV	R4, (R0)+
+	RETURN
+7$:	MOV	R3, R1
+	SUB	R3, R0
+	CMP	R0, #4
+	BLT	8$
+	TST	-(R0)
+	MOV	R0, (R1)+
+	CALL	free
+8$:	MOV	#ENOMEM, errno
+	CLR	R0
+RET.A:	RETURN
+
+
+;; void free(void* ptr)
+free::
+	MOV	#$AHEAP, R4
+	CMP	R1, (R4)+	; R4: #$FREEL
+	BLO	RET.A		; Don't free NULL or static data
+	MOV	-(R1), R3
+	CMP	(R3)+, (R1)+	; R3: Block size including header, R1: original ptr
+	MOV	R3, (R1)
+1$:	MOV	R4, R2
+	MOV	(R2), R4	; R2: next free block
+	BEQ	2$		; ptr is the last free block
+	CMP	R4, R1
+	BLO	1$
+2$:	MOV	(R2), -(R1)	; Insert block into the Free list
+	MOV	R1, (R2)
+;; Merge adjacent free blocks
+	CMP	R2, #$FREEL
+	BNE	3$
+	MOV	(R2), R2
+	BEQ	RET.A
+3$:	MOV	R2, R0
+	TST	(R0)+		; R0: points to block size
+4$:     MOV	(R0), R3	; R3: size of the current block
+	MOV	-(R0), R2	; R2: pointer to Next block
+	BEQ	RET.A		; No more free blocks
+	ADD	R0, R3		; R1: pointer after this block
+	CMP	R3, R2
+	BNE	3$
+;; Merge adjacent blocks
+	MOV	(R3)+, (R0)+
+	ADD	(R3), (R0)
+	BR	4$
+
+;; void *realloc(void *ptr, size_t new_size)
+realloc::
+	TST	R1
+	BEQ	MALLO3		; malloc(size)
+	INC	R2
+	BIC	#1, R2
+	MOV	-2(R1), R4      ; R4: cur block size
+	SUB	R2, R4
+	BHIS	5$		; reduce size
+	ADD	R2, R4
+	ADD	R1, R4      	; R4: points beyond the block
+	MOV	#$FREEL, R3
+2$:	MOV	R3, R0
+	MOV	(R0), R3
+	BEQ	3$		; Not found
+	CMP	R3, R4
+	BNE	2$
+	MOV	2(R3), R4	; R4: length of the adjacent block
+	ADD	-2(R1), R4	; R4: sum of lengths
+	MOV	R4, R5		; R5: sum of lengths
+	SUB	R2, R4		; R4: remainder size
+	BHIS	4$
+3$:	MOV	R1, R3
+	MOV	R2, R1
+	.malloc
+	BEQ	9$
+	PUSH	R0
+	MOV	R3, R1
+	MOV	-2(R3), R2
+6$:	MOVB	(R3)+, (R0)+
+	SOB	R2, 6$
+	BR	7$
+4$:	MOV	(R3), (R0)	; Unlink free block
+	MOV	R5, -2(R1)
+5$:	CMP	R4, #4
+	BLO	8$		; Too small reminder, do nothing
+	PUSH	R1
+	SUB	R4, -(R1)
+	ADD	(R1)+, R1
+	TST	-(R4)
+	MOV	R4, (R1)+
+7$:	CALL	free		;!!!? .free?    ; free() the rest of block
+	POP	R1
+8$:	MOV	R1, R0		; return old block
+9$:	RETURN
+
+;; void* calloc(size_t num, size_t size)
+calloc::
+	MUL	R2, R1
+callo$::.SUBRC	malloc
+	BEQ	9$
+	ADD	R1, R0
+2$:	CLRB	-(R0)
+	SOB	R1, 2$
+9$:	RETURN
+
+;; size_t _msize(void* memblock)
+.msize::
+	MOV	-(R1), R0
+	RETURN
+
+
+.END

@@ -1,0 +1,707 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	CODGEN
+
+
+.INCLUDE /ccmacr.inc/
+
+;; 1-byte $BASE-offsets
+.GLOBL	ADD$I, SUB$I, MUL$I, DIV$I, MOD$I, LSH$I, RSH$I, AND$I, OR$I, XOR$I
+.GLOBL	ADD$L, SUB$L, MUL$L, DIV$L, MOD$L, LSH$L, RSH$L, AND$L, OR$L, XOR$L
+.GLOBL	ADD$F, SUB$F, MUL$F, DIV$F
+.GLOBL	EQ$, NE$, LOS$, LO$, HIS$, HI$, LEQ$, LT$, GEQ$, GT$
+
+.GLOBL	T$JMP, T$RET, T$SWIT, AD$SP, SAV$, RST$, CP$ST, Z$ST
+.GLOBL	I$CMP, L$CMP, F$CMP
+.GLOBL	C$WRI, I$WRI, $WRIT, $DRD, $GOTO, I$ADD, I$SUB, I$MUL, I$DIV, I$ASL, I$ASR, PU$16, P$LAD, PU$SP
+
+.GLOBL	RCH, ESTMT, CURTYP, DCLTOR, TYPEDEF, EMSTR, BNDARG, REBIN8, IS.INV
+
+.PSECT	.text
+
+;; Allocate next Internal Label
+NXILAB:	DEC	ILAB
+	MOV	(PC)+, R1
+ILAB:	.WORD	0		; Decreasing Internal Label for continue/break labels
+	RETURN
+
+NILAB:	CALL	NXILAB
+NEWLAB:	PUSH	R2
+	MOV	TEXT+2, R2
+	PUSH.D	LABELS
+	CLR	R1
+	LOC.OF
+	PUSH.W	LABELS
+	POP	R2
+	RETURN
+
+
+;; Call it by JSR R5, LOOP
+LOOP:	MOV	CUBRK, (SP)
+	PUSH	CUCONT
+	CALL	NILAB
+	MOV	ILAB, CUCONT
+	CALL	NXILAB
+	MOV	R1, CUBRK
+	JMP	(R5)
+
+;; Check for Undefined array
+;; Allocate it and define its size
+;; R4: array size
+AUTARR:	MOV	R3, R1		; R1: Array Type
+	ADD	TYPES, R3
+	CMP	(R3)+, (R3)+
+	TST	(R3)
+	BPL	RET.A
+	MOV	R4, (R3)	; Define array size
+	SZ.TYP
+	.EMI	Z$ST		; Allocate space in Stack for local array
+	BR	EMIR.A
+
+
+LDEF:	T.DCL			; R1: offset in SYMBS, R2: actual type
+	PUSH.D	LOCALS
+	MOV	R2, R3		;!!!?
+	MOV	R2, R1
+	SZ.TYP
+	BMI	1$		; Array of undefined size is allocated in LINARR
+	.EMI	Z$ST		; Allocate space in Stack for local variable
+	.EMIT
+1$:	CLR	R5		; Offset in Stack
+	IF.TOK	T.ASGN, LINI	; =
+	RETURN
+
+
+
+LINVAL:	.EMI	P$LAD
+	MOV	R5, R1
+	.EMIT
+	MOV	R3, R1
+	NEG	R1
+	PU.EXT
+	.EXPR
+	C.RVAL
+	PO.EXT
+	MOV	R1, R3
+	EXTY.P
+	CALL	ASSIGN
+	EM.POP
+RET.A:	RETURN
+
+
+
+;; Init local array by string literal
+LINSTR:	PUSH	RDATA+2
+	CALL	EMSTR
+	MOV	RDATA+2, R4
+	SUB	(SP)+, R4	; R1: string length including \0
+	CALL	AUTARR
+	MOV	R4, R1		; R1: string length including \0
+	.EMI	CP$ST
+EMIR.A:	BR	EMIR.B
+
+
+LINARR:	IF.TOK	T.LSTR, LINSTR
+	CK.TOK	T.LBRC		; {
+	SV.VEC	BINDS
+	CLR	R1		; parameter list
+	.SUBRC	BNDARG
+	PUSH	MEMSTM
+	MOV	BINDS, R2
+	MOV	BINDS+2, R4
+	ASR	R4		; Array size
+	CALL	AUTARR
+	MOV	-(R3), R3	; R3: Element type
+	MOV	R3, R1
+	SZ.TYP
+	INC	IS.INV
+2$:	MOV	(R2)+, MEMSTM
+	.LINI
+	ADD	R1, R5		; R1: Element size
+	SOB	R4, 2$
+	DEC	IS.INV
+	JMP	REBIN8	;!!!O
+
+
+;; Begin array or struct initialization
+;; Invoke by JSR R0, CKLBRC
+BEGAGG::CLR	(SP)
+	IF.TOK	T.LBRC, 1$	; {
+	MOV	AGGLV, (SP)
+	BEQ	LINSCT		; .ERR 5 (Unexpected Token)
+1$:	INC	(PC)+
+AGGLV::	.WORD	0		; Aggregation level
+	JMP	(R0)
+
+
+
+LINSCT:	CK.TOK	T.LBRC		; {
+	ADD	TYPES, R3
+	MOV	2(R3), R4	; Pointer to struct definition
+	CLR	R5		; R5: offset to thr first field
+1$:	IF.TOK	T.RBRC, RET.A
+	TST	(R4)+
+	BEQ	RET.A
+	MOV	(R4)+, R3	; R3: Field Type
+	.LINI
+	MOV	R3, R1		; R1: Field Type
+	SZ.TYP
+	ADD	R1, R5		; R5: offset to next field
+	IF.TOK	T.RBRC, RET.A
+	CK.TOK	T.COMMA
+	BR	1$
+
+
+LINI::	MOV	R3, R1
+	TY.CAT
+	MOV	R2, R1
+	switch
+	case	TC.SCA	, LINVAL
+	case	TC.PTR	, LINVAL
+	case	TC.ARR	, LINARR
+	case	TC.SCT	, LINSCT
+	default
+ERR.9:	.ERR	9.
+
+
+
+
+.IIF NE C$DBL ARTHD: ADD	#TH.D-TH.F, R5
+ARTHF:	ADD	#TH.F-TH.L, R5
+ARTHL:	ADD	#TH.L-TH.I, R5
+ARTHI:	ADD	#TH.I-1, R5
+EMIOF5::MOVB	(R5), R1
+EMIOFF::ASL	R1
+	ADD	#$BASE, R1
+EMIR.B:	BR	EMIR.C
+
+EMADD::	.EXTYP
+	MOV	R1, R4
+	MOV	#T.ADD, R1
+			; Fallthrough
+;; Generate code for Binary operators
+;; R4: type
+GENBIN::
+;; Arith
+ARITH::	MOV	R1, R2			; R2: token
+	SUB	#2, EXTYPE+2
+	MOV	R4, R3			; R3: right type
+	EXTY.P
+	MOVB	R1, R5			; R5: operation
+	CMPB	R5, #T.ASGN
+	BEQ	ASSIGN
+	C.RVAL
+
+;; Eliminate char types
+	MOV	(R4), R1
+	.TRY2I
+	MOV	R1, (R4)
+	MOV	R3, R1
+	.TRY2I
+	MOV	R1, R3
+
+	CMP	(R4), R3
+	BEQ	7$			; Same types
+
+;; Try to cast to the same type
+	CMP	R3, #TY.UI
+	BLO	PARITH
+	CMP	(R4), #TY.UI
+	BLO	PARITH
+
+	CMP	(R4), R3
+	BHI	5$
+
+;;  (typeof b)a op b
+	.EMI	SAV$		; Save b
+	MOV	R3, R1
+	SZ.TYP
+	PUSH	R1
+	.EMIT
+	MOV	R3, R1
+	.CAST
+	.EMI	RST$		; Restore b
+	POP	R1
+	.EMIT
+	MOV	R3, R1
+	BR	6$
+
+;;  a op (typeof a)b
+5$:	MOV	R3, R1
+	PU.EXT
+	MOV	(R4), R1
+	.CAST
+	PO.EXT
+	MOV	R1, R3
+6$:	EXTY.P
+
+7$:	CMPB	R5, #T.GTEQ & ^x0FF
+	BLOS	COMPAR
+
+	IS.PTR
+	BCS	PTRDIF
+	BIC	#177760, R5
+	MOV	R3, R1
+;!!!R	BIC	#177600, R1
+	switch
+	case	TY.I	, ARTHI
+	case	TY.UI	, ARTHI
+	case	TY.L	, ARTHL
+	case	TY.UL	, ARTHL
+	case	TY.FLT	, ARTHF
+.IIF NE C$DBL	case TY.DBL	, ARTHD
+	default
+ERR.B:	.ERR	4
+
+
+COMPAR:	MOVB	R5, R2			; R2: low byte of the Token
+	MOV	#I$CMP, R1
+	MOV	#TH.SBR, R4
+	ASR	R3
+	BCS	2$
+	ADD	#TH.UBR-TH.SBR, R4		; unsigned comparisons
+2$:	CMP	R3, #TY.L/2
+	BLO	6$
+	MOV	#L$CMP, R1
+	CMP	R3, #TY.FLT/2
+	BLO	6$
+	MOV	#F$CMP, R1
+6$:	.EMIT
+	ADD	R2, R4
+	MOVB	-<T.EQ & 377>(R4), R1
+	EXTY.P
+	MOV	#TY.I, (R4)
+	BR	EMIOFF
+
+
+ASSIGN: MOV	(R4), R1
+	BPL	ERR.D		; Not L-Value
+	NEG	R1
+	MOV	R1, (R4)
+	CMP	R1, R3
+	BEQ	1$
+	IS.PTR
+	BCS	ASGPTR
+	ASR	R1
+;; Cast
+	PUSH	(R4)
+	MOV	R3, R1
+	PU.EXT
+	MOV	(SP), R1
+	.CAST
+	PO.EXT
+	POP	R1
+1$:	SZ.TYP
+	switch
+	case	1, EMCWRI
+	case	2, EMIWRI
+	default
+	.EMI	$WRIT
+EMIR.C:	BR	EMIR.D
+
+EMCWRI:	.EMI	C$WRI		; destination is char or unsigned char
+	RETURN
+
+
+ASGPTR:	CMP	R3, #TY.I
+	BEQ	EMIWRI		; Just for assigning 0 literal
+	MOV	R3, R1
+	IS.PTR
+	BCS	EMIWRI
+	IS.FUN
+	BNE	ERR.D		; Different types
+EMIWRI:	.EMI	I$WRI
+	RETURN
+
+
+
+;; Pointer arithmetics
+;; R2: token
+;; (R4): left type
+PARITH:	CMPB	R5, #T.GTEQ & ^x0FF
+	BLOS	COMPAR
+	CMP	(R4), R3
+	BLO	1$
+	MOV	(R4), R0	; Swap to keep (R4) to be a pointer type
+	MOV	R3, (R4)
+	MOV	R0, R3
+1$:     MOV	R3, R1
+	PU.EXT
+	CAST.I
+	PO.EXT
+	MOV	(R4), R1
+	IS.PTR
+	BCC	ERR.D
+	SZ.TYP
+	switch
+	case	1	, 3$	; char*
+	case	2	, 4$	; int*
+	default
+	.EMI	PU$16
+	.EMIT
+	.EMI	I$MUL
+	BR	3$
+4$:	.EMI	I$ASL
+3$:	MOV	#I$ADD, R1
+	CMPB	R2, #T.SUB
+	BNE	EMIRET
+	TST	-(R1)		; R1: #I$SUB
+EMIR.D:	BR	EMIRET
+
+;; Difference of two pointers
+;; Assume they are of the same type
+;; R1: target type of the Pointers
+PTRDIF:	CMPB	R2, #T.SUB
+	BNE	ERR.D
+	.EMI	I$SUB
+	MOV	#TY.I, (R4)
+	SZ.TYP
+	switch
+	case	1	, 1$	; char*
+	case	2	, 2$	; int*
+	default
+	.EMI	PU$16
+	.EMIT
+	.EMI	I$DIV
+1$:	RETURN
+2$:	.EMI	I$ASR
+	RETURN
+
+ERR.D:	.ERR
+
+
+
+;; return statement
+RETUR::	IF.TOK	T.SEMI, 2$
+	CALL	PEXPR
+2$:	MOV	(PC)+, R1
+LOCFUN::.WORD	0		; LOCALS+2 at entry of function
+	.UNWTO
+EMRET::	.EMI	T$RET
+RET.B:	RETURN
+
+DO:     .EMI	T$JMP
+	.EMIT	4
+	JSR	R5, LOOP
+	EM.JMP
+	MOV	R1, R4		; R4: place to insert the offset to condition
+	.STMT
+	CK.TOK	T.WHILE
+	MOV	R4, R1
+	EM.COF
+	.BEXPR
+	EM.BNE
+	MOV	R4, R2
+	TST	(R2)+		; R2: TEXT-offset of body
+	EM.OFF
+	BR	ELOOP2
+
+
+FOR:	CK.TOK	T.LPAR
+	IF.TOK	T.SEMI, 1$
+	CALL	PEXPR
+1$:	CLR	R2		; R2:0 means no condition
+     	MOV	TEXT+2, R3	; R3: place for Offset to Condition
+	IF.TOK	T.SEMI, 2$
+	.PEXPR
+	CAST.B
+	EM.POP
+	EM.BEQ
+	MOV	R1, R2
+;	PUSH.W	BREAKS
+	CK.TOK	T.SEMI
+2$:	EM.JMP
+	MOV	R1, R4		; R4: place for Offset to Body
+	JSR	R5, LOOP
+	IF.TOK	T.RPAR,	3$
+	.PEXPP
+	EM.POP
+3$:	MOV	R3, R1
+	EM.JMP
+	BR	WHILE1
+
+ERR.A:	.ERR
+
+
+PSYM:	IF.CH	':, LABEL
+	BCC	ERR.A
+	MOV	#T.SYM, R1
+	.TYPP2
+	BCS	DECLAR
+PEXPR:	.PEXPR
+	C.RVAL
+	EM.POP
+ESMT.A:	BR	ESMT.B
+
+LABEL:	.SYMB
+	CALL	NEWLAB
+	BR	STMT
+
+
+;; continue
+CONTIN:	MOV	(PC)+, R1
+CUCONT:	.WORD	0		; Current `continue;` statement target
+        BR	GOTO1
+
+
+
+;; break
+BREAK:	MOV	(PC)+, R1
+CUBRK:	.WORD	0		; Current point to Break target
+	BR	GOTO1
+
+
+;!!!R	.UNWTO
+;!!!R	EM.JMP
+;!!!R	PUSH.W	BREAKS
+;!!!R	BR	ESMT.C
+
+
+GOTO:	G.SYMB
+GOTO1:	BEQ	ERR19
+	PUSH	#ESTMT
+;; Translate goto/break/continue
+;; R1: label
+TGOTO:	PUSH.W	GOTOS
+	.EMI	$GOTO
+	CLR	R1
+	LOC.OF
+	.EMIT
+	MOV	TEXT+2, R1
+	PUSH.W	GOTOS
+EMIRET:	.EMIT
+	RETURN
+
+
+ERR19:	.ERR	19.
+
+
+BLOCK:	PUSH	TDEFS+2, LOCALS+2
+1$:	IF.TOK	T.RBRC, 2$
+	CALL	STMT
+	BR	1$
+2$:	MOV	(SP), R1
+	.UNWTO
+	POP	LOCALS+2, TDEFS+2
+	RETURN
+
+
+IF:	.BEXPR
+	EM.BEQ
+	MOV	R1, R4
+	.STMT
+	IF.TOK	T.ELSE, 2$
+	MOV	R4, R1
+	BR	3$
+2$:	EM.JMP
+	MOV	R1, R5
+	MOV	R4, R1
+	EM.COF
+	.STMT
+	MOV	R5, R1
+3$:	EM.COF
+	RETURN
+
+
+WHILE:	CLR	R4
+	JSR	R5, LOOP
+	.BEXPR
+	EM.BEQ
+	MOV	R1, R2
+	BR	WHILE2
+
+WHILE1:	MOV	R4, R1
+	EM.COF
+WHILE2:	.STMT
+	MOV	CUCONT, R1
+	CALL	TGOTO
+E.LOOP:	MOV	R2, R1
+	BEQ	ELOOP2
+	EM.COF
+ELOOP2:	POP	CUCONT
+	BR	E.BRK
+
+;; default:
+HDEFAU::
+	MOV	TEXT+2, @CASES
+	BR	HCASE1
+
+;; case
+HCASE:	EV.CIE
+	MOV	TEXT+2, R2
+	PUSH.D	CASES
+HCASE1:	CK.TOK	T.COLON
+			; Fallthrough
+;; Parse Statement
+STMT::	G.TOK
+	switch
+	case	T.LBRC	, BLOCK		; {
+	case	T.IF	, IF
+	case	T.WHILE	, WHILE
+	case	T.FOR	, FOR
+	case	T.BREAK	, BREAK
+	case	T.CONT	, CONTIN
+	case	T.RETURN, RETUR
+	case	T.SYM	, PSYM
+	case	T.DO	, DO
+	case	T.SWIT	, SWITC
+	case	T.CASE	, HCASE
+	case	T.DEFA	, HDEFAU
+	case	T.GOTO	, GOTO
+	case	T.SEMI	, RET.B		; Null statement
+	case	T.TYPE	, LTYPED
+;	case	T.AUTO	, DECLAR
+;	case	T.REGI	, DECLAR
+	case	T.STAT	, DECLAR
+	default
+	.TYPP2
+	BCC	PEXPR
+;; variable declaration
+DECLAR:	MOV	R1, R3
+1$:	PUSH	R3
+	CALL	LDEF
+	POP	R3
+	IF.TOK	T.COMM, 1$
+;; End of declarations
+ESMT.B:
+;; Parse Assignment statement
+;;!!!R PASGMT::
+;;!!!R 	CALL	PBINAR
+ESTMT::	CK.TOK	T.SEMI		; Check for ';'
+	RETURN
+
+
+;; Local typedef
+LTYPED:	CALL	TYPEDEF
+	BR	ESMT.B
+
+
+
+
+SWITC:	PUSH	CUBRK
+	CALL	NXILAB
+	MOV	R1, CUBRK
+	SV.VEC	CASES
+	CK.TOK	T.LPAR
+	.PEXPP
+	CAST.I
+	PO.EXT
+	EM.PLC	T$SWIT
+	MOV	R1, R5
+	CLR	R1		; initial default
+	PUSH.W	CASES
+	.STMT
+	EM.JMP
+	PUSH	R1
+;	PUSH.W	BREAKS
+	MOV	R5, R1
+	EM.COF
+
+	MOV	#CASES, R3
+	MOV	(R3)+, R4
+	TST	(R4)+
+	MOV	(R3), R1
+	ASR	R1
+	ASR	R1
+	.EMIT
+	MOV	R1, R5
+	BEQ	4$
+3$:	MOV	(R4)+, R1
+	.EMIT
+	MOV	(R4)+, R1
+	TST	-(R1)
+	SUB	TEXT+2, R1
+	.EMIT
+	SOB	R5, 3$
+4$:	MOV	@-(R3), R1	; MOV @CASES, R1	; `default` label
+	BEQ	5$
+	TST	-(R1)
+	SUB	TEXT+2, R1
+5$:	.EMIT
+	POP	R1
+	EM.COF
+
+	RE.VEC	CASES
+E.BRK:	MOV	CUBRK, R1
+	CALL	NEWLAB
+	POP	CUBRK
+RET.C:	RETURN
+
+
+
+.RDATA
+
+TH.I::	.BYTE	ADD$I, SUB$I, MUL$I, DIV$I, MOD$I, AND$I, OR$I, XOR$I, LSH$I, RSH$I
+TH.L::	.BYTE	ADD$L, SUB$L, MUL$L, DIV$L, MOD$L, AND$L, OR$L, XOR$L, LSH$L, RSH$L
+TH.F::	.BYTE	ADD$F, SUB$F, MUL$F, DIV$F
+
+TH.SBR::.BYTE	EQ$, NE$, LT$, LEQ$, GT$, GEQ$
+TH.UBR::.BYTE	EQ$, NE$, LO$, LOS$, HI$, HIS$
+
+
+
+.PSECT	.bss2
+
+ABSS::
+
+
+;; Vectors
+
+;; .OBJ Sections
+TEXT::	.WORD	0, 0		; Code and Data
+RDATA::	.WORD	0, 0		; String literals
+
+RELOCS::.WORD	0, 0		; Pairs (offset in .text, offset in SYMBS). For string literals in .rdata `offset`==0
+
+GOTOS::	.WORD	0, 0
+LABELS::.WORD	0, 0
+
+CASES::	.WORD	0, 0
+
+;; List of actual `break;` statements of the current scope
+;BREAKS:	.WORD	0, 0
+
+
+GSD::	.WORD	0, 0
+
+SYMBS::	.WORD	0, 0		; 2-WORD RADIX-50 names
+TYPES::	.WORD	0, 0		; Type descriptors
+VARS::	.WORD	0, 0		; Triplets (Symbol, Type, Offset in .text)
+
+
+TDEFS::	.WORD	0, 0		; typedef definitions, structs, unions
+
+ENUMS::	.WORD	0, 0
+
+
+LOCALS::.WORD	0, 0		; (Parameter Symbol, Type) pairs
+
+EXTYPE::.WORD	0, 0		; Stack of current expression type. Empty between Statements
+
+
+CURARG::.WORD	0, 0
+
+
+;;--
+;; Current parameter bindings
+BINDS::	.WORD	0, 0		; List of MemoryStream pointers
+MEMSTM::.WORD	0		; Macro-expansion result
+;;--
+
+TMP::	.WORD	0, 0
+
+ASCII::	.WORD	0, 0		; ASCII token representation
+EXPANS::.WORD	0, 0
+
+
+
+
+.EVEN
+
+
+EBSS::
+
+.END

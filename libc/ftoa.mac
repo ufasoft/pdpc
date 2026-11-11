@@ -1,0 +1,94 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	FTOA
+
+.INCLUDE /macros.inc/
+
+.GLOBL	$MUL5, $DIV5
+
+.PSECT	.text
+
+;; 2(SP) 2exponent
+;; (SP)	 10exponent
+
+;; char* ftoa(float value, char* buf)
+ftoa::
+	PUSH	R3
+	MOV	R3, R5
+	CLR	R4		; R4: 2exponent
+	CLR	-(SP)		; 10exponent
+	MOV	R2, R0		; R0: second WORD
+	MUL	R4, R2		; R2:R3 = 0
+	ROL	R1
+	BCC	1$
+	MOVB	#'-, (R5)+
+1$:	SWAB	R1
+	BEQ	PRI		; Print 0
+	BISB	R1, R4		; R4: biased 2exponent
+	SEC
+	ROR	R1
+	SWAB	R1
+	BISB	R1, R2
+	MOV	R0, R3		; R2:R3 mantissa
+	SUB	#128.+18., R4	; Make 2-exponent un-biased signed
+	BLT	PULLUP
+PDNCK:	BGT	PULLDN
+;; R2 MSB==0 here
+PRI:	ASHC	#-6., R2
+	MOV	R3, R1		; R2:R1  unsigned long value
+	MOV	R5, R3
+	MOV	#10., R4
+	.SUBRC	ultoa
+1$:	TSTB	(R5)+		; Position R5 at the end of string
+	BNE	1$
+	SUB	R5, R0
+	INC	R0
+	MOV	R5, R2
+	DEC	R2
+	TST	(SP)		; (SP): 10exp diff
+	BGE	3$
+	CMP	(SP), R0
+	BLT	3$
+	DEC	(SP)	;!!!?
+	BR	7$
+2$:	MOVB	-(R2), 1(R2)
+7$:	INC	(SP)
+	BLT	2$
+3$:	MOVB	#'., (R2)
+	CLRB	(R5)		; Terminating NUL
+	POP	R1		; R1: 10exponent
+	BEQ	4$
+	MOVB	#'E, (R5)+
+	MOV	R5, R2
+	MOV	R4, R3		; R3: 10.
+	CALL	itoa		; print exponent
+4$:	POP	R0
+	RETURN
+
+
+;; CF: here
+PULLU1:	ROR	R2
+	ROR	R3
+PULLU2:	INC	R4
+	BEQ	PRI
+PULLUP:	CMP	R2, #32767./5
+	BHIS	PULLU1
+	CALL	$MUL5
+	DEC	(SP)
+	BR	PULLU2
+
+
+PULLD1:	INC	(SP)
+	CALL	$DIV5
+PULLDN:	BIT	#40000, R2
+	BNE	PULLD1
+	ASL	R3
+	ROL	R2
+	DEC	R4
+	BR	PDNCK
+
+
+.END

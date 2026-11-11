@@ -1,0 +1,39 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	SETJMP
+
+.INCLUDE /macros.inc/
+
+;; struct jmp_buf {
+;;    void
+;;	*sp
+;;      , *pc
+;;      , *rt
+;; };
+
+.GLOBL	$INVOR
+
+.PSECT	.text
+
+;; int setjmp(jmp_buf env)
+setjmp::
+	MOV	SP, (R1)+	; sp
+	MOV	(SP), R2
+	MOV	R2, (R1)+	; pc
+	MOV	2(R2), (R1)+	; rt
+	RETURN
+
+;; void longjmp(jmp_buf env, int val)
+longjmp::
+	MOV	R2, R0
+	BNE	1$
+	INC	R0
+1$:	MOV	(R1)+, SP
+	PUSH	(R1)+
+	MOV	(R1), $INVOR+2	; rt
+	RETURN
+
+.END

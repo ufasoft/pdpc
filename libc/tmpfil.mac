@@ -1,0 +1,55 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	TMPFILE
+
+.GLOBL	fopen, sprintf, rand
+
+
+.INCLUDE /macros.inc/
+
+
+.PSECT	.text
+
+;; char* tmpnam(char* filename)
+tmpnam::
+	MOV	R1, R4
+	BNE	1$
+	MOV	#$SCRAT, R4
+1$:	CALL	rand
+	MOV	R1, R3
+	MOV	#FNFMT, R2
+	MOV	R4, R1
+	.SUBRC	sprintf
+	MOV	#RMODE, R2
+	.SUBRC	fopen
+	BEQ	2$		; No such file
+	MOV	R0, R1
+	.fclose
+	BR	1$
+2$:	MOV	R4, R0
+	RETURN
+
+
+;; FILE* tmpfile(void)
+tmpfile::
+	CLR	R1
+	CALL	tmpnam
+	MOV	R0, R1
+	MOV	#WRMODE, R2
+	.SUBRC	fopen
+	BEQ	9$
+	BISB	#F.TMP, (R0)
+9$:	RETURN
+
+
+.RDATA
+
+FNFMT:	.ASCIZ	"%d.tmp"
+RMODE:	.ASCIZ	"r"
+WRMODE:	.ASCIZ	"w+"
+
+
+.END

@@ -1,0 +1,214 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	PRINTF
+
+.INCLUDE /macros.inc/
+
+.PSECT	.text
+
+STMCB:	MOV	(PC)+, R2
+CURSTM:	.WORD	0	;SELF-MOD
+	JMP	fputc
+
+STRCB:	MOVB	R1, @CURSTM
+	INC	CURSTM
+	CLRB	@CURSTM
+	RETURN
+
+
+;; int fprintf(FILE* stream, const char* format, ...)
+fprintf::
+	MOV	SP, R3
+	ADD	#6, R3
+	BR	vfprintf
+
+;; int sprintf(char* buffer, const char* format, ...)
+sprintf::
+	MOV	SP, R3
+	ADD	#6, R3
+			; Fallthrough
+;; int vsprintf(char* buffer, const char* format, va_list)
+vsprintf::
+	MOV	R3, R4
+	MOV	R2, R3
+	MOV	#32767., R2
+	BR	vsnprintf
+
+;; int snprintf(char* buffer, size_t n, const char* format, ...)
+snprintf::
+	MOV	SP, R4
+	ADD	#8., R4
+			; Fallthrough
+;; int vsnprintf(char* buffer, size_t n, const char* format, va_list)
+vsnprintf::
+	MOV	R2, MAXSIZ
+	MOV	#STRCB, OUTCAL+2
+	MOV	R4, R5
+	MOV	R3, R4
+	BR	$VPRINTF
+
+;; int printf(const char* format, ...)
+printf::
+	MOV	SP, R2
+	CMP	(R2)+, (R2)+		; R2 += 4
+			; Fallthrough
+;; int vprintf(const char* format, va_list arg)
+vprintf::
+	MOV	R2, R3
+	MOV	R1, R2
+	MOV	stdout, R1
+			; Fallthrough
+;; int vfprintf(FILE*, const char* format, va_list arg)
+vfprintf::
+	MOV	R2, R4
+	MOV	R3, R5
+	MOV	#STMCB, OUTCAL+2
+	MOV	#-1, MAXSIZ
+;; R4: format
+;; R5: va_list
+$VPRINTF:
+	MOV	R1, CURSTM
+	CLR	 -(SP)		; Char counter
+VPRI1:	CLR	(PC)+
+WIDTH:	.WORD	0
+	CLR	(PC)+
+ZFILL:	.WORD	0
+	CLR	(PC)+
+IS.LNG:	.WORD	0		; %l flag
+	CLR	(PC)+
+UPCAS:	.WORD	0
+	CLR	(PC)+
+SIGN:	.WORD	0
+	MOV	#77777, MAXFLD
+	MOVB	(R4)+, R1
+	BEQ	VPRI8
+	CMPB	R1, #'%
+	BNE	VPRI4
+VPRI2:	MOVB	(R4)+, R1
+	BEQ	VPRI8
+	switch
+	case	'+	, 7$
+	case	'%	, VPRI4
+	case	'0	, 8$
+	case	'.	, RDMAX
+	case	'd	, PINT
+	case	'i	, PINT
+	case	'f	, PFLT
+	case	'F	, PFLT
+	case	'e	, PFLT
+	case	'E	, PFLT
+	case	'g	, PFLT
+	case	'G	, PFLT
+	case	'h	, VPRI2		; short is int
+	case	'L	, VPRI2
+	case	'l	, 5$
+	case	'n	, 6$
+	case	'u	, PUINT
+	case	'o	, POCT
+	case	'p	, POCT
+	case	'x	, PHEX
+	case	'X	, PUPHEX
+	case	'c	, 3$
+	case	's	, PSTR
+	default
+	.isdigit
+	BEQ	VPRI1
+10$:	DEC	R4
+	CALL	$RDINT
+	MOV	R0, WIDTH
+	BR	VPRI2
+8$:	TST	WIDTH
+	BNE	10$
+	INCB	ZFILL
+	BR	VPRI2
+5$:	INCB	IS.LNG
+	BR	VPRI2
+7$:	INCB	SIGN
+	BR	VPRI2
+6$:	MOV	(SP), @(R3)+
+	BR	VPRI1
+3$:	MOV	(R3)+, R1
+VPRI4:	CALL	OUTC
+	BR	VPRI1
+
+RDMAX:	CALL	$RDINT
+	MOV	R0, (PC)+
+MAXFLD::	.WORD	77777	;!!!D
+	BR	VPRI2
+
+
+VPRI8:	POP	R0
+RET.A:	RETURN
+
+
+PSTR:	MOV	(R5)+, R0
+PSTR1:	MOV	R0, R3
+	MOV	R3, R1
+	.strlen
+	SUB	R0, WIDTH
+	MOV	#C.SP, R1
+3$:	DEC	WIDTH
+	BMI	1$
+	CALL	OUTC
+	BR	3$
+1$:	MOVB	(R3)+, R1
+	BEQ	VPRI1
+	TSTB	UPCAS
+	BEQ	2$
+	.SUBRC	toupper
+	MOV	R0, R1
+2$:	PUSH	#1$
+OUTC:   DEC	MAXFLD
+ 	BLT	RET.A
+OUTCAL:	.SUBRC	0	;SELF-MOD
+	POP	R0
+	INC	(SP)
+	CMP	(SP), (PC)+
+MAXSIZ:	.WORD	0	;SELF-MOD
+	BHIS	VPRI8
+	JMP	(R0)
+
+
+PUPHEX:	INCB	UPCAS
+PHEX:	MOV	#16.-10.+'u, R1
+PUINT:	ADD	#10.-'u, R1
+	MOV	R1, R0
+	BR	PINT1
+
+PINT:	MOV	#10., R0
+	MOV	(R5)+, R1
+	SXT	R2
+	BR	PINT3
+
+POCT:	MOV	#8., R0
+PINT1:	MOV	(R5)+, R1
+	CLR	R2
+PINT3:	TST	IS.LNG
+	BEQ	PINT2
+	MOV	(R5)+, R2
+PINT2:	PUSH	R4
+	MOV	#$SCRAT, R3
+	MOV	R0, R4
+	.SUBRC	ltoa
+	POP	R4
+	BR	PSTR1
+
+PFLT:	MOV	(R5)+, R1
+	MOV	(R5)+, R2
+	MOV	#$SCRAT, R3
+	.SUBRC	ftoa
+	BR	PSTR1
+
+$RDINT::MOV	R4, R1
+	TST	-(SP)
+	MOV	SP, R2
+	MOV	#10., R3
+	.SUBRC	strtol		; strtol(R4, &R4, 10.)
+	POP	R4
+	RETURN
+
+
+.END

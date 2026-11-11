@@ -1,0 +1,157 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+
+.TITLE	CRT0
+
+.INCLUDE /macros.inc/
+
+.IF NE C$CC
+	.INCLUDE /ccmacr.inc/
+.ENDC
+
+.GLOBL	I.TRAP, .EXIT1, $EHEAP, $FREEL, R50TA4, MAIN
+
+
+.ASECT
+
+
+. = 34
+	.WORD	I.TRAP, 340
+. = $USRSP
+	.WORD	1000		; Temporary Stack, switches to 3000 after initialization
+
+
+.ASECT
+. = 1500
+
+
+;; Copy command line part backward from R4, to R2 ignoring spaces
+COPCL:	MOVB	(R5)+, -(R2)
+	MOVB	(R5)+, R3
+1$:	CMPB	-(R4), #C.SP
+	BEQ	2$
+	MOVB	(R4), -(R2)
+2$:	SOB	R3, 1$
+	RTS	R5
+
+
+;; Entry point
+.START::
+
+;	MOV	$USRTO, R0
+;	TST	(R0)+
+;	MOV	R0, $AHEAP
+;	MOV	R0, $EHEAP
+	MOV	#$EHEAP, R0
+	MOV	(R0), -4(R0)	; $AHEAP = $EHEAP
+	CLR	-(R0)		; $FREEL = 0
+
+	.SERR
+;; Parse Command Line
+;; Allocates argv in Stack
+;; Returns:  R1: argc, R2: argv
+PARCL::
+	MOV	(PC)+, R1
+ISTK:
+.IIF NE C$CC	.WORD	CC$STK
+.IIF EQ C$CC	.WORD	ASTACK
+
+	CLR	-(R1)		; Reserve a word in Stack as space for changing filename extension of argv[1]
+	MOV	#$CLBUF, R2
+	ADD	$CLLEN, 2$
+
+1$:	CMP	R2, (PC)+
+2$:	.WORD	$CLBUF
+	BHIS	8$
+	MOV	R2, R3
+3$:	CMPB	(R3)+, #C.SP	; It relies on the last command-line character being '\r' or '\0'
+	BHI	3$
+	CLRB	-1(R3)
+	PUSH	R3
+	SUB	R2, R3
+	TSTB	(R2)
+	BEQ	5$
+	SUB	R3, R1
+	.strcpy
+	MOV	R1, @ARGV
+	ADD	#2, ARGV
+5$:	POP	R2
+	BR	1$
+8$:
+;	CLR	$CLLEN
+
+CARGV0:
+	MOV	R1, R2		; pointer into future Stack
+;; Compose argv[0]
+;; Try to find filename of the running Job
+	MOV	$SYPTR, R3
+	MOV	$USRLC(R3), R3
+	SUB	#5000, R3
+	MOV	#1000, R1
+1$:	CMP	(R3)+, #^rSAV
+	BEQ	5$		; Found
+	SOB	R1, 1$
+	CLRB	-(R2)
+	BR	8$
+
+5$:	SUB	#10, R3
+	MOV	#$SCRAT, R4
+	JSR	R5, R50TA4
+	MOV	#COPCL, R0
+	JSR	R5, (R0)
+	.BYTE	0, 3
+	JSR	R5, (R0)
+	.BYTE	'., 6
+	JSR	R5, (R0)
+	.BYTE	':, 3
+8$:	MOV	ARGV, R4
+	MOV	R2, ARGV
+	BIC	#1, R2
+	CLR	-(R2)		; last word of argv[]
+	MOV	R4, R1
+	SUB	#ARGV, R1
+	ASR	R1		; R1: argc
+	MOV	R1, R5
+7$:	MOV	-(R4), -(R2)
+	SOB	R5, 7$
+	MOV	R2, SP		; R2: argv
+	PUSH	R2, R1, #.EXIT1
+	JMP	MAIN
+
+ARGV:	.WORD	ARGV+2
+	.BLKW	20.
+	.BLKB	400     	; Enough for Command Line
+
+
+
+;.PSECT	.crt0
+.ASECT
+
+. = ASTACK
+.INCLUDE	/thunk.mac/
+
+;. = 7000
+;.INCLUDE	/trap.mac/
+
+
+
+
+
+.PSECT	.bss
+
+;; Order does matter, used in free()
+$AHEAP::.WORD	0	; Start of Heap
+$FREEL::
+	.LIMIT	; Free block list
+$EHEAP == $FREEL + 2
+
+;$FREEL::.WORD	0	; Free block list
+;$EHEAP::.WORD	0	; End of Heap
+
+
+
+
+.END	.START

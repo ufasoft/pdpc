@@ -1,0 +1,250 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	STDLIB functions
+
+
+.INCLUDE /macros.inc/
+
+.GLOBL	STMS
+
+
+.PSECT	.text
+;.ASECT
+;. = 22000
+
+
+;; int atexit(void (*func)(void))
+atexit::
+	PUSH.W	EXITH
+	RETURN
+
+
+exit::
+	MOVB	R1, R0
+.EXIT1::
+	MOVB	R0, $USRRB
+1$:	POP.W	EXITH
+	BCS	4$
+	MOV	R1, 2$ + 2
+2$:	.SUBRC	0			;!!! No atexit() allowed in handlers
+	BR	1$
+3$:	.fclose
+4$:	POP.W	STMS
+	BCC	3$
+	BR	EXIT9
+
+
+.OOM::	MOV	#ENOMEM, errno
+	CLR	R1
+	CALL	perror
+.ABORT::
+	MOVB	#127., $USRRB
+EXIT9:
+;; Pass empty list of commands to KMON
+	CLR	$CLBUF
+	MOV	#1, $CLLEN
+	MOV	#CHNIF$, $JSW
+;	CLR	$JSW
+	CLR	R0
+	.EXIT
+
+
+;; Check char bouns
+;; Invoke with  JSR R5, CHRBND
+CHRBND:	TST	(SP)+
+	CMPB	R1, (R5)+
+	BHI	TST.R0
+	CMPB	R1, (R5)
+LO.FAL:	BLO	TST.R0
+INCR0:	INC	R0
+TST.R0:	TST	R0
+RET.D:	RETURN
+
+.MACRO	CHR.BN	lo, hi
+	JSR	R5, CHRBND
+	.BYTE	hi, lo
+.ENDM	CHR.BN
+
+
+;; int isprint(int)
+isprint::
+	ADD	#129., R1
+	CMPB	R1, #C.SP+129.
+	BR	LO.FAL
+
+
+;; int isdigit(int ch)
+isdigit::
+	CHR.BN	'0, '9
+
+
+;; int isalnum(int ch)
+isalnum::
+	.isdigit
+	BNE	RET.D
+			; Fallthrough
+;; int isalpha(int ch)
+isalpha::
+	BIC	#40, R1
+			; Fallthrough
+;; int isupper(int ch)
+isupper::
+	CHR.BN	'A, 'Z
+
+
+;; int isxdigit(int)
+isxdigit::
+	CALL	isalnum
+	BEQ	RET.D
+	CMPB	#'F, R1		; R1 is digit or uppercase letter here
+	BR	LO.FAL
+
+;; int islower(int ch)
+islower::
+	CHR.BN	'a, 'z
+
+
+
+;; int toupper(int c)
+toupper::
+	CALL	islower
+TOUPP1:	BEQ	R.R1
+	MOV	#40, R0
+	XOR	R0, R1
+R.R1:	MOV	R1, R0
+	RETURN
+
+;; int tolower(int c)
+tolower::
+	CALL	isupper
+	BR	TOUPP1
+
+
+;; int abs(int j)
+abs::
+	SUB	R1, R0
+	BMI	R.R1
+	RETURN
+
+
+;; long labs(long j)
+labs::
+	MOV	R1, R0
+	MOV	R2, R1
+LABS1::	BPL	RET.D
+	NEG	R1
+NEGR0R:	NEG	R0
+	SBC	R1
+	RETURN
+
+;; div_t div(int x, int y)
+div::
+	MOV	R1, R5		; R5: pointer to div_t
+	MOV	R2, R1
+	DIV	R3, R0
+	BVC	SAVR01
+ERR.11:	.ERR	11.
+
+;; ldiv_t ldiv(long x, long y)
+ldiv::
+	PUSH	R1		; ldiv_t pointer
+	PUSH	R2
+	MOV	R4, R1
+	MOV	R5, R2
+	CALL	labs		; labs(y). R2: sign in MSB
+	MOV	R0, R4
+	MOV	R1, R5
+	POP	R1
+	PUSH	R2		; (SP): sign
+	MOV	R3, R2
+	XOR	R2, (SP)	; (SP): result sign
+	CALL	labs		; labs(x)
+	MOV	R0, R2
+	MOV	R1, R3
+	CLR	-(SP)		; (SP): shift counter
+	MUL	(SP), R0	; R1:R0 = 0  result
+	ASHC	R0, R4
+	BEQ	ERR.11
+	BR	3$
+1$:	ASL	R4
+	ROL	R5
+3$:	INC	(SP)
+	TST	R5
+	BPL	1$
+
+2$:	CMP	R5, R3
+	BLO	4$
+	BHI	5$
+	CMP	R4, R2
+	BHI	5$
+4$:	SUB	R4, R2
+	SBC	R3
+	SUB	R5, R3
+	SEC
+5$:	ROL	R0
+	ROL	R1
+	ASL	R2
+	ROL	R3
+	DEC	(SP)
+	BGT	2$
+
+	BIT	(SP)+, (SP)+	; check sign
+	CALL	LABS1		; negate result if NF=1
+	POP	R5		; R5: ldiv_t pointer
+	MOV	R2, (R5)+	; ldiv_t.rem
+	MOV	R3, (R5)+
+SAVR01:	MOV	R0, (R5)+	; ldiv_t.quot
+	MOV	R1, (R5)+	;
+	RETURN
+
+
+SIGINT	= 2
+
+;; Convert 4 RADIX-50 words
+;; R4: output buffer
+;; OUTPUT: R4: after last char
+R50TA4::JSR	R5, (PC)
+	JSR	R5, (PC)
+	MOV	(R3)+, R1
+;; INPUT: R1: RADIX-50 value, R4: buffer to save ASCII
+;; OUTPUT: R4: points at the end of buffer
+R50TOA::
+	JSR	R5, R50DIG
+	.WORD	50 * 50
+	JSR	R5, R50DIG
+	.WORD	50
+	MOV	R1, R0
+	BR	R50ASC
+R50DIG: CLR	R0
+	DIV	(R5)+, R0
+R50ASC:
+	BNE	2$
+	MOVB	#C.SP, R0
+	BR	1$
+2$:	ADD	#'A - 1, R0
+	CMP	R0, #'Z
+	BLOS	1$
+	MOVB	R50TAB-32-'A(R0), R0
+1$:	MOVB	R0, (R4)+
+	RTS	R5
+
+
+;	.PSECT	.bss
+
+errno::	.WORD	0
+
+;; Handlers set by atexit()
+EXITH:	.WORD	0, 0
+
+
+.RDATA
+
+R50TAB:	.ASCII	"$.%0123456789"
+
+
+
+
+.END

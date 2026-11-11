@@ -1,0 +1,33 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	PERROR
+
+.INCLUDE /macros.inc/
+
+.PSECT	.text
+
+;; void perror(const char *s)
+perror::
+	MOV	stderr, R2
+	TST	R1
+	BEQ	1$
+	TSTB	(R1)
+	BEQ	1$
+	.fputs
+	MOV	#DELIM, R1
+	.fputs
+1$:	MOV	errno, R1
+	CALL	strerror
+	MOV	R0, R1
+	.fputs
+	MOV	#C.NL, R1
+	.fputc
+	RETURN
+
+.RDATA
+DELIM:	.ASCIZ	": "
+
+.END

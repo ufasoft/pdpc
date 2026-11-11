@@ -1,0 +1,71 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	STRSPN
+
+.INCLUDE /macros.inc/
+
+.GLOBL	$RERM1
+
+.PSECT	.text
+
+;; size_t strspn(const char* dest, const char* src)
+STRSP1:	INC	R0
+strspn::
+	MOVB	(R1)+, R4
+	BEQ	CRET.A
+	MOV	R2, R3
+2$:	CMPB	(R3), R4
+	BEQ	STRSP1
+	TSTB	(R3)+
+	BNE	2$
+CRET.A:	RETURN
+
+
+;; size_t strcspn(const char* dest, const char* src)
+strcspn::
+	MOVB	(R1)+, R4
+	BEQ	CRET.A
+	MOV	R2, R3
+2$:	CMPB	(R3), R4
+	BEQ	CRET.A
+	TSTB	(R3)+
+	BNE	2$
+	INC	R0
+	BR	strcspn
+
+;; char *strpbrk(const char *dest, const char *breakset)
+strbprk::
+	MOVB	(R1)+, R3
+	BEQ	CRET.A
+	MOV	R2, R4
+1$:	MOVB	(R4)+, R0
+	BEQ	strbprk
+	CMPB	R0, R3
+	BNE	1$
+	JMP	$RERM1		; MOV R1, R0;  DEC R0;  RETURN
+
+;; char* strtok(char* str, const char* delim)
+strtok::
+	TST	R1
+	BNE	3$
+	MOV	(PC)+, R1
+2$:	.WORD	0	;SELF-MOD.  Beginning of the next token
+3$:	.SUBRC	strspn
+	ADD	R0, R1
+	.SUBRC	strpbrk
+	BEQ	5$
+	CLRB	(R0)+
+	BR	8$
+5$:	.strlen
+	BEQ	9$
+	ADD	R1, R0
+8$:	MOV	R0, 2$
+	MOV	R1, R0
+9$:	RETURN
+
+
+
+.END

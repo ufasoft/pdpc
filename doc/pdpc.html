@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+	<title>C Compiler for PDP-11 (RT-11 OS)</title>
+	<meta charset="UTF-8">
+	<meta name="description" content="Ufasoft C Compiler for RT-11. Developer's Manual.">
+	<meta name="keywords" content="C, CC, ANSI C, C89, C99, _PDPC, PDP C, K&R, compiler, preprocessor, PDP-11, RT-11">
+	<meta name="author" content="Sergey Pavlov">
+
+    <style>
+    	.clhs {
+    		float: right;
+    	}
+
+    	.rt11 {
+    		float: right;
+    		margin-right: 10px;
+    	}
+
+    	.index {
+    		column-width: 15em;
+    		column-count: auto;
+    	}
+
+    	.index a {
+    		display: block;
+    	}
+
+    	.bibliography {
+			font-size: 70%;
+    	}
+    </style>
+</head>
+
+<body>
+
+<article>
+
+<h1>Ufasoft C Compiler for PDP-11 (RT-11 OS)<br>
+Developer's Manual
+</h1>
+<i>Version 2026.0</i>
+<p> This is a minimal compiler for <a href="https://en.wikipedia.org/wiki/PDP-11_architecture">PDP-11</a> computers family, implementing subset of <a href="https://en.wikipedia.org/wiki/ANSI_C">ANSI C</a> (C89) standard.<br>
+It generates <a href="https://en.wikipedia.org/wiki/Threaded_code">threaded code</a>.
+<p>The project's codename is <b>PDP C</b>.
+<p> The priority was the compiler binary size. So it doesn't have any optimizer.
+
+<p>
+Source code: <a href="https://github.com/ufasoft/pdpc">github.com/ufasoft/pdpc</a>.<br>
+Project's site: <a href="https://ufasoft.com/pdpc">ufasoft.com/pdpc</a>.<br>
+Floppy disk image for УКНЦ: <a href="https://ufasoft.com/files/uknc/cc.dsk">cc.dsk</a>
+
+<p>
+<author>Author: Sergey Pavlov <a href="mailto:dev@ufasoft.com">dev@ufasoft.com</a></author>
+
+<h2>Requirements</h2>
+<ul>
+    <li> PDP-11 compatible CPU with <i>EIS</i> and <i>FIS</i> instruction sets. Or installed emulator of them.<br>
+         <i>FIS</i> is used for floating point operations. Integer-only programs don't require it.
+	<li>56 KB RAM
+</ul>
+Originally it was designed for running on Soviet PDP-11 clones:
+<ul>
+	<li><a href="https://en.wikipedia.org/wiki/DVK">МС 0502 (ДВК-3)</a>
+	<li><a href="https://en.wikipedia.org/wiki/UKNC">МС 0511 (УКНЦ)</a>
+</ul>
+
+<h2>Command line</h2>
+<code>.CC [options] foo.c</code>
+<p>By default this builds <code>foo.sav</code> executable file.
+<p>Options:
+<ul>
+	<li> <b>-c</b> 					Compile only, without <i>LINK</i> invocation.
+	<li> <b>-D</b> <i>sym</i> 		Add <i>#define sym 1</i> Preprocessor definition.
+	<li> <b>-E</b> 					Preprocess only.
+	<li> <b>-o</b> <i>fname</i>   	Place output in file <i>fname</i>.
+</ul>
+
+<h2>Predefined preprocessor macros</h2>
+<ul>
+    <li> <b>__pdp11__</b> = <i>40</i> (as <i>PDP-11/40</i> was the model supporting both <i>EIS</i> and <i>FIS</i> instuction sets).
+    <li> <b>_PDPC</b> = <i>20260</i> (encoded version number)
+    <li> <a href="https://cppreference.com/c/preprocessor/replace#Predefined_macros"><b>__DATE__</b></a>
+    <li> <a href="https://cppreference.com/c/preprocessor/replace#Predefined_macros"><b>__FILE__</b></a>
+    <li> <a href="https://cppreference.com/c/preprocessor/replace#Predefined_macros"><b>__LINE__</b></a>
+</ul>
+
+<h2>Calling conventions</h2>
+<p>Push all arguments to Stack, beginning with the last argument. <br/>
+Copy first five argument WORDs to registers <i>R1..R5</i> <br/>
+Assign register <i>R0</i> = <i>0</i>.<br/>
+Call with <b>JSR PC, funaddr</b> instruction. <br/>
+In the called function the address of the first argument would be <i>SP+2</i>.<br/>
+<p>Fuctions return by <b>RTS PC</b> instruction. The caller is responsible for cleaning the Stack from arguments. <br/>
+The function result is in <i>R0</i> or for 32-bit results in <i>R1:R0</i> (<i>R1</i> contains higher 16 bits).
+<p>Most of standard functions from <i>C.LIB</i> library don't use arguments from the Stack and can be invoked with arguments in registers only.<br/>
+Exceptions: variable-parameter functions, like <i>printf()</i>.
+
+<h2>Differences from the ANSI C Standard</h2>
+<ul>
+    <li> Identifiers are case-insensitive, only first 6 chars are significant for compatibility with the RT-11 linker.<br/>
+         <b>_</b> (underscore) character is mapped to <i>RADIX-50</i> <b>.</b> (dot) character in <i>.OBJ</i> file.<br/>
+         Preprocessor identifiers are case-sensitive and all chars are significant.
+    <li> There are no <a href="https://en.wikipedia.org/wiki/Digraphs_and_trigraphs_(programming)#C">Digraphs and Trigraphs</a>
+	<li> <i>double</i> and <i>float</i> are the same type - 4-byte value in DEC's format.
+	<li> <i>time_t</i> is 4-byte <i>unsigned long</i> to address <a href="https://en.wikipedia.org/wiki/Year_2038_problem">Y2038 problem</a>.
+</ul>
+
+<h2>Limitations</h2>
+<ul>
+    <li> Maximum of 15 simultaneously open files.<br>
+     	 Every <i>fopen()</i> allocates 526 bytes for buffer, so the actual limit may be lower because of Heap fragmentation.
+    <li> Stack size is ~1200 bytes.
+    <li> Command line is limited by 80 chars.
+    <li> Sum of function invocation arguments sizes must be <= 126 bytes.
+</ul>
+
+<hr/><h2 id="error-codes">Error codes</h2>
+<ul>
+	<li id="stack-overflow"><b>Stack overflow</b>.
+	<li id="error-1"><b>C1</b> - Command line error.
+	<li id="error-2"><b>C2</b> - General unclassified error.
+	<li id="error-3"><b>C3</b> - Preprocessor <i>#error</i> directive.
+	<li id="error-4"><b>C4</b> - Comma is expected.
+	<li id="error-5"><b>C5</b> - Unexpected token.
+	<li id="error-6"><b>C6</b> - Overflow
+	<li id="error-8"><b>C8</b> - Wrong constant expression.
+	<li id="error-9"><b>C9</b> - Wrong variable initialization.
+	<li id="error-10"><b>C10</b> - .OBJ file write error.
+	<li id="error-11"><b>C11</b> - Arithmetic error (Division by zero).
+	<li id="error-12"><b>C12</b> - Undeclared Identifier.
+	<li id="error-13"><b>C12</b> - Incorrect Token.
+	<li id="error-14"><b>C14</b> - Invalid declarator.
+	<li id="error-16"><b>C16</b> - Wrong type.
+	<li id="error-17"><b>C17</b> - Wrong field name.
+	<li id="error-19"><b>C19</b> - The statement is not allowed here.
+	<li id="error-20"><b>C20</b> - Not supported functionality.
+	<li id="error-21"><b>C21</b> - Expression must be L-Value.
+</ul>
+
+<h2>C.LIB - standard C Library</h2>
+<p>Implemented functions:
+<div class="index">
+	<a href="https://cppreference.com/c/program/abort">abort</a>
+	<a href="https://cppreference.com/c/numeric/math/abs">abs</a>
+	<a href="https://cppreference.com/c/chrono/asctime">asctime</a>
+	<a href="https://cppreference.com/c/program/atexit">atexit</a>
+	<a href="https://en.cppreference.com/c/string/byte/atof">atof</a>
+	<a href="https://cppreference.com/c/string/byte/atoi">atoi</a>
+	<a href="https://cppreference.com/c/string/byte/atoi">atol</a>
+	<a href="https://www.typewritten.org/Manual/Bell/UNIX/SystemIII/man2/brk.html">brk</a>
+	<a href="https://cppreference.com/c/algorithm/bsearch">bsearch</a>
+	<a href="https://cppreference.com/c/memory/calloc">calloc</a>
+	<a href="https://cppreference.com/c/io/clearerr">clearerr</a>
+	<a href="https://cppreference.com/c/chrono/clock">clock</a>
+	<a href="https://cppreference.com/c/chrono/ctime">ctime</a>
+	<a href="https://cppreference.com/c/numeric/math/div">div</a>
+	<a href="https://cppreference.com/c/program/exit">exit</a>
+	<a href="https://cppreference.com/c/io/fclose">fclose</a>
+	<a href="https://cppreference.com/c/io/feof">feof</a>
+	<a href="https://cppreference.com/c/io/ferror">ferror</a>
+	<a href="https://cppreference.com/c/io/fflush">fflush</a>
+	<a href="https://cppreference.com/c/io/fgetc">fgetc</a>
+	<a href="https://www.man7.org/linux/man-pages/man3/fileno.3.html">fileno</a>
+	<a href="https://cppreference.com/c/io/fopen">fopen</a>
+	<a href="https://cppreference.com/c/io/fprintf">fprintf</a>
+	<a href="https://cppreference.com/c/io/fputc">fputc</a>
+	<a href="https://cppreference.com/c/io/fputs">fputs</a>
+	<a href="https://cppreference.com/c/io/fread">fread</a>
+	<a href="https://cppreference.com/c/memory/free">free</a>
+	<a href="https://en.cppreference.com/c/io/fscanf">fscanf</a>
+	<a href="https://cppreference.com/c/io/fseek">fseek</a>
+	<a href="https://cppreference.com/c/io/ftell">ftell</a>
+	ftoa
+	<a href="https://cppreference.com/c/io/fwrite">fwrite</a>
+	<a href="https://cppreference.com/c/io/getc">getc</a>
+	<a href="https://cppreference.com/c/chrono/gmtime">gmtime</a>
+	<a href="https://cppreference.com/c/string/byte/isalnum">isalnum</a>
+	<a href="https://cppreference.com/c/string/byte/isalpha">isalpha</a>
+	<a href="https://cppreference.com/c/string/byte/isdigit">isdigit</a>
+	<a href="https://cppreference.com/c/string/byte/islower">islower</a>
+	<a href="https://cppreference.com/c/string/byte/isprint">isprint</a>
+	<a href="https://cppreference.com/c/string/byte/isspace">isspace</a>
+	<a href="https://cppreference.com/c/string/byte/isupper">isupper</a>
+	<a href="https://cppreference.com/c/string/byte/isxdigit">isxdigit</a>
+	<a href="https://cplusplus.com/reference/cstdlib/itoa/">itoa</a>
+	<a href="https://cppreference.com/c/numeric/math/labs">labs</a>
+	<a href="https://cppreference.com/c/chrono/localtime">localtime</a>
+	<a href="https://cppreference.com/c/program/longjmp">longjmp</a>
+	<a href="https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/itoa-itow">ltoa</a>
+	<a href="https://cppreference.com/c/memory/malloc">malloc</a>
+	<a href="https://cppreference.com/c/string/byte/memchr">memchr</a>
+	<a href="https://cppreference.com/c/string/byte/memcmp">memcmp</a>
+	<a href="https://cppreference.com/c/string/byte/memcpy">memcpy</a>
+	<a href="https://cppreference.com/c/string/byte/memmove">memmove</a>
+	<a href="https://cppreference.com/c/string/byte/memset">memset</a>
+	<a href="https://cppreference.com/c/chrono/mktime">mktime</a>
+	<a href="https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/msize">_msize</a>
+	<a href="https://cppreference.com/c/io/perror">perror</a>
+	<a href="https://cppreference.com/c/io/puts">puts</a>
+	<a href="https://cppreference.com/c/algorithm/qsort">qsort</a>
+	<a href="https://cppreference.com/c/numeric/random/rand">rand</a>
+	<a href="https://cppreference.com/c/memory/realloc">realloc</a>
+	<a href="https://cppreference.com/c/io/rename">rename</a>
+	<a href="https://cppreference.com/c/io/rewind">rewind</a>
+	<a href="https://www.typewritten.org/Manual/Bell/UNIX/SystemIII/man2/brk.html">sbrk</a>
+	<a href="https://en.cppreference.com/c/io/fscanf">scanf</a>
+	<a href="https://cppreference.com/c/program/setjmp">setjmp</a>
+	<a href="https://cppreference.com/c/program/signal">signal</a>
+	<a href="https://cppreference.com/c/io/snprintf">snprintf</a>
+	<a href="https://cppreference.com/c/numeric/random/srand">srand</a>
+	<a href="https://en.cppreference.com/c/io/fscanf">sscanf</a>
+	<a href="https://cppreference.com/c/string/byte/strcat">strcat</a>
+	<a href="https://cppreference.com/c/string/byte/strchr">strchr</a>
+	<a href="https://cppreference.com/c/string/byte/strcpy">strcpy</a>
+	<a href="https://cppreference.com/c/string/byte/strcspn">strcspn</a>
+	<a href="https://cppreference.com/c/string/byte/strdup">strdup</a>
+	<a href="https://cppreference.com/c/string/byte/strerror">strerror</a>
+	<a href="https://cppreference.com/c/chrono/strftime">strftime</a>
+	<a href="https://cppreference.com/c/string/byte/strlen">strlen</a>
+	<a href="https://cppreference.com/c/string/byte/strncat">strncat</a>
+	<a href="https://cppreference.com/c/string/byte/strncmp">strncmp</a>
+	<a href="https://cppreference.com/c/string/byte/strpbrk">strpbrk</a>
+	<a href="https://cppreference.com/c/string/byte/strrchr">strrchr</a>
+	<a href="https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/strrev-wcsrev">strrev</a>
+	<a href="https://cppreference.com/c/string/byte/strspn">strspn</a>
+	<a href="https://cppreference.com/c/string/byte/strstr">strstr</a>
+	<a href="https://cppreference.com/c/string/byte/strtok">strtok</a>
+	<a href="https://cppreference.com/c/string/byte/strtol">strtol</a>
+	<a href="https://cppreference.com/c/chrono/time">time</a>
+	<a href="https://cppreference.com/c/io/tmpfile">tmpfile</a>
+	<a href="https://cppreference.com/c/io/tmpnam">tmpnam</a>
+	<a href="https://cppreference.com/c/string/byte/tolower">tolower</a>
+	<a href="https://cppreference.com/c/string/byte/toupper">toupper</a>
+	<a href="https://cppreference.com/c/io/ungetc">ungetc</a>
+	<a href="https://cppreference.com/c/io/vfprintf">vfprintf</a>
+	<a href="https://cppreference.com/c/io/vprintf">vprintf</a>
+	<a href="https://cppreference.com/c/io/vsnprintf">vsnprintf</a>
+</div>
+
+<hr/><div style="margin-top: 20px;"><i>&copy; Ufasoft</i></div>
+</body>
+</html>

@@ -1,0 +1,76 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	SIGNAL
+
+.GLOBL	.ABORT
+
+.INCLUDE /macros.inc/
+
+
+.PSECT	.text
+
+
+SIGINT	= 2
+SIGABRT = 6
+SIGFPE	= 8.
+SIGSEGV = 11.
+
+SIG.ERR	= -1
+SIG.DFL	= 0
+SIG.IGN	= 1
+
+;; abort(void)
+abort::
+	MOV	(PC)+, R2
+ABRHAN:	.WORD	0
+	MOV	#SIGABRT, R1
+	PUSH	#.ABORT
+SIGHAN:	CMP	R2, #SIG.IGN
+	BLOS	9$
+	PUSH	R1
+	CALL	(R2)
+	TST	(SP)+
+9$:	RETURN
+
+
+FPEISR:	MOV	(PC)+, R2
+FPEHAN:	.WORD	0
+	MOV	#SIGFPE, R1
+	CALL	SIGHAN
+	RTI
+
+SCCA:	MOV	(PC)+, R2
+INTHAN:	.WORD	0
+	MOV	#SIGINT, R1
+	BR	SIGHAN
+
+
+;; void (*signal( int sig, void (*handler) (int))) (int)
+signal::
+	switch
+	case	SIGINT, 2$
+	case	SIGABRT, 6$
+	case	SIGFPE, 8$
+	default
+	DEC	R0		; SIG_ERR
+	RETURN
+6$:	PUSH	ABRHAN
+	MOV	R2, ABRHAN
+	BR	9$
+2$:	PUSH	INTHAN
+	MOV	#SCCA, R3
+	MOV	R2, INTHAN
+	BNE	1$
+	CLR	R3		; SIG_DFL
+1$:	.SCCA	#$AREA, R3
+	BR	9$
+8$:	PUSH	FPEHAN
+	MOV	#FPEISR, 244
+	MOV	R2, FPEHAN
+9$:     POP	R0
+	RETURN
+
+.END

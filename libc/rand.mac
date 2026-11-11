@@ -1,0 +1,27 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	RAND
+
+.INCLUDE /macros.inc/
+
+.PSECT	.text
+
+
+;; int rand(void)
+rand::
+	MOV	#25173., R1
+	MUL	(PC)+, R1
+RSTATE:	.WORD	1		; Initial srand(1)
+	ADD	#13849., R1
+	MOV	R1, R0
+	BIC	#100000, R0		; <= RAND_MAX
+			; Fallthrough
+;; void srand(unsigned seed)
+srand::
+	MOV	R1, RSTATE
+	RETURN
+
+.END

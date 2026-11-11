@@ -1,0 +1,345 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	STDIO
+
+.INCLUDE /macros.inc/
+
+.MCALL	.PURGE
+
+
+
+.REM &
+
+struct _FILE {
+	uint8_t	flags;
+	uint8_t	cha;
+	long	pos;
+	long	len;		;!!!? may be reverse order?
+	char	unget2, unget1;
+	uint16_t	buf[];
+} FILE;
+
+&
+
+.PSECT	.text
+;.ASECT
+;. = 20000
+
+;; Parse Filename
+;; R4: address of 4-word DEVBLK
+PA$FN::
+	MOV	SP, R3
+	.CSISPC	#$SCRAT, #DEFEXT, R1
+	MOV	R3, SP
+	MOV	#$SCRAT + 30., R3
+	CALL	(PC)			; Copy 4 words
+	CALL	(PC)
+	MOV	(R3)+, (R4)+
+	RETURN
+
+;; int puts(const char* str )
+puts::
+	MOV	stdout, R2
+	.fputs
+	MOV	#S.NL, R1
+			; Fallthrough
+;; int fputs(const char* s, FILE* stream)
+fputs::
+	MOV	R1, R4
+1$:	MOVB	(R4)+, R1
+	BEQ	RET.A
+	.fputc
+	BR	1$
+
+
+
+;; int putchar(int ch)
+putchar::
+	MOV	(PC)+, R2
+stdout::.WORD	 STDSTM		;SELF-MOD
+			; Fallthrough
+;; int fputc(int ch, FILE* stream)
+fputc::
+	TSTB	1(R2)	; channel
+	BNE	4$
+	CMPB	R1, #C.NL
+	BNE	2$
+	.TTYOUT	#C.CR
+2$:	MOV	R1, R0
+	.TTYOUT
+	BR	9$
+4$:	BIS	#F.DIRT, (R2)+
+	MOV	(R2), R3	; pos
+	BIC	#177000, R3
+	ADD	R2, R3
+	MOVB	R1, 10.(R3)
+	MOV	#1, R4		; SEEK_CUR
+	ADD	R4, (R2)	; (R2) += 1
+	MOV	(R2)+, R0	; R0: Low WORD of len
+	ADC	(R2)+
+	MOV	R2, R5		; R5: address of len
+	CMP	-(R2), 2(R5)	; Compare length
+	BLO	6$
+	BHI	5$
+	CMP	R0, (R5)
+	BLOS	6$
+5$:	MOV	R0, (R5)+
+	MOV	(R2), (R5)
+6$:	BIT	#777, -(R2)
+	BNE	9$
+	MOV	R1, R5		; R5: ch
+        MOV	R2, R1
+	TST	-(R1)
+	SUB	R4, (R2)+	; Decrement position to the previous Block
+	SBC	(R2)
+	MOV	R4, R2		; R2: 1
+	CLR	R3
+	.fseek			; fseek(stream, saved, SEEK_CUR)
+	BMI	RET.A
+	MOV	R5, R1		; R1: ch
+9$:
+RET.R1:	MOV	R1, R0
+RET.A:	RETURN
+
+
+;; int ungetc(int c, FILE*)
+ungetc::
+	MOV	R1, R0
+	BMI	9$
+	MOV	#F.UNG1, R4
+	BIT	R4, (R2)
+	BNE	5$
+	MOVB	R1, 11.(R2)
+	BR	8$
+5$:	.ERR	31.		;!!!D To detect two ungetc() calls
+	ASR	R4		; R4: F.UNG2
+	BIT	R4, (R2)
+	BNE	R$EOF
+	MOVB	R1, 10.(R2)
+8$:	BIS	R4, (R2)+
+	SUB	#1, (R2)+	; FILE.pos--
+	SBC	(R2)
+9$:
+CRET.C:	RETURN
+
+
+;; void rewind(FILE *stream)
+rewind::
+	CLR	R4
+	MUL	R4, R2	; R2:R3 = 0
+	CLRB	(R1)
+			; Fallthrough
+			; fseek(stream, 0, SEEK_SET);
+;; int fseek(FILE *stream, long offset, int whence)
+fseek::
+	TSTB	1(R1)	;!!!? cha
+	BEQ	R$EOF
+	.SUBRC	fflush
+	TST	(R1)+
+	MOV	R1, R0
+	TST	(R0)+		; R0 points to high WORD of pos
+	DEC	R4		; whence
+	BMI	7$		; SEEK_SET
+	BEQ	4$		; SEEK_CUR
+	MOV	4(R1), (R1)
+	MOV	6(R1), (R0)
+4$:	ADD	(R1), R2
+	ADC	R3
+	ADD	(R0), R3
+7$:	MOV	R2, (R1)
+	MOV	R3, (R0)
+;; Synchronize FILE* in R1 to its offset
+;; R1: points to pos field
+SYNC:	MOV	R1, R4
+	MOV	(R4)+, R3	; pos
+	MOV	(R4)+, R2
+	MOV	(R4)+, R5	; len
+	MOV	(R4)+, R0
+	TST	(R4)+		; R4: address of buffer
+	BIC	#F.UNG1!F.UNG2!F.EOF, -(R1)
+	BIT	#777, R3
+	BNE	2$
+	CMP	R3, R5
+	BNE	2$
+	CMP	R2, R0
+	BEQ	ATEOF
+2$:	ASHC	#-9., R2
+	.READW	#$AREA, 1(R1), R4, #256., R3
+	BCC	$IOOK
+	MOV	#F.EOF, R2	; flags
+	MOVB	$ERRBY, (R1)
+	BEQ	6$
+	ASR	R2		; R2: F.ERR
+6$:	BISB	R2, (R1)
+R$EOF::	MOV	#-1, R0		; R0: EOF
+CRET.B:	RETURN
+
+;; at EOF
+;; Zero the Buffer
+ATEOF:	MOV	#256., R0
+1$:	CLR	(R4)+
+	SOB	R0, 1$
+	BR	$IOOK
+
+
+;; Open for append
+FOPENA:	CALL	FOPENW
+	MOV	R0, R1
+	BEQ	RET.A
+	PUSH	R2
+	MOV	R3, R2
+	POP	R3
+	MOV	#2, R4		; SEEK_END
+	.fseek
+RETR1A:	BR	RET.R1
+
+
+;; int getchar(void)
+getchar::
+	MOV	(PC)+, R1
+stdin::	.WORD	 STDSTM		;SELF-MOD
+			; Fallthrough
+fgetc::
+	MOV	#F.UNG2, R4
+	BITB	R4, (R1)
+	BNE	8$
+	ASL	R4		; R4: #F.UNG1
+	BITB	R4, (R1)+
+	BNE	6$
+	TSTB	(R1)+		; channel
+	BNE	4$
+	.TTYIN
+	BR	9$
+4$:	MOV	(R1), R3
+	BIC	#177000, R3
+	BNE	7$
+	.SUBRC	SYNC
+	BMI	9$
+7$:	ADD	R1, R3		; R0 == 0 here
+	BISB	10.(R3), R0
+	BR	5$
+6$:	DEC	R1
+	BISB	11.(R1), R0
+	BR	3$
+8$:	BISB	10.(R1), R0
+3$:	BIC	R4, (R1)+
+5$:     ADD	#1, (R1)+	; FILE.pos++
+	ADC	(R1)
+9$:	RETURN
+
+
+;; int fclose(FILE *stream)
+fclose::
+	INC	R0		; R0: 1
+	MOVB	1(R1), R4
+	ASH	R4, R0
+	BIC	R0, CHBMAP	; free channel
+	BITB	#F.TMP, (R1)
+	BEQ	2$
+	.PURGE	R4
+	BR	3$
+2$:	CALL	fflush
+	.CLOSE	R4
+3$:	REMO.W	STMS
+FRE:	.free
+$IOOK:	CLR	R0
+CRET.D:	RETURN
+
+
+
+
+;; int fflush(FILE *stream)
+fflush::
+	BIT	#F.DIRT, (R1)
+	BEQ	CRET.D
+	BIC	#F.DIRT, (R1)+
+	MOV	(R1)+, R3
+	MOV	(R1)+, R2
+	ASHC	#-9., R2
+	ADD	#6, R1		; R1: points to buffer
+	MOVB	-11.(R1), R4	; R4: channel
+	.WRITW	#$AREA, R4, R1, #256., R3
+	BCS	STMERR
+	BR	$IOOK
+
+
+FOPENE:	MOVB	$ERRBY, R0
+	MOVB	LOOERR(R0), R3
+FOPEN8:	MOV	R3, errno
+	MOV	R4, R1		; Unwind. R1: FILE*
+	BR	FRE
+FOPENW:	CLR	R3
+	.ENTER	#$AREA, (R2), #$DEVBL, R3
+	BCS	FOPENE
+	CLR	R0
+FOPEN6:	MOV	R0, R3
+	CLR	R2
+	ASHC	#9., R2
+	MOV	R3, 6.(R4)	; length
+	MOV	R2, 8.(R4)	; length
+	MOV	R4, R1		; R1: FILE*
+	PUSH.W	STMS
+	BR	RETR1A
+
+;; FILE* fopen(const char* filename, const char* mode);
+fopen::
+	MOV	#$DEVBL, R4
+	CALL	PA$FN
+	BCS	CRET.D
+	MOV	#12.+512., R1
+	.MALLOC
+	BEQ	CRET.D				; R0: FILE
+;; Returns: Writes channel for File.chan field
+;; Find free channel: #1..14
+	MOV	#EMFILE, R3	; no free channels
+	MOVB	(R2)+, R1	; R1: mode char
+	MOV	R0, R2
+	INC	R2    		; R2:& FILE.chan
+	MOV	#1, R4
+OPEN7:	ROL	R4
+	BCS	FOPEN8
+	INCB	(R2)		; FILE.chan++
+	BIT	R4, (PC)+
+CHBMAP:	.WORD	0		; bitmap of open channels
+	BNE	OPEN7
+	BIS	R4, CHBMAP
+	MOV	R0, R4		; R4: FILE*
+	switch
+	case	'r	, 5$
+	case	'w	, FOPENW
+	case	'a	, FOPENA
+	default
+	TST	-(R3)		; R3: #EINVAL
+	BR	FOPEN8
+5$:	.LOOKUP	#$AREA, (R2), #$DEVBL
+	BCC	FOPEN6
+			; Fallthrough
+STMERR:	BISB	#F.ERR, (R4)
+	MOVB	$ERRBY, R0
+	MOVB	LOOERR(R0), R3
+	MOV	R3, errno
+	BR	$IOOK		; CLR R0; RETURN
+
+stderr::.WORD	 STDSTM
+
+
+S.NL:	.ASCIZ	<C.NL>
+
+
+.RDATA
+LOOERR:	.BYTE	EBADF, ENOENT, EBUSY, EEXIST, EFAULT, EINVAL, ENODEV
+
+
+.PSECT	.bss
+
+.EVEN
+STDSTM:	.WORD	0, 0, 0, 0	; FILE
+STMS::	.WORD	0, 0		; Open streams
+$AREA:	.BLKW	4
+DEFEXT:	.WORD	0, 0, 0, 0
+
+
+.END

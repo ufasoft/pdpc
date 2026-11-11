@@ -1,0 +1,327 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	CC
+
+.SBTTL	Lexical Parser
+
+.GLOBL	MEMSTM, TMP2RA, VAARGS, CURARG, NSLINE, NX.TOK, TOKVA0, TOKVA1, INTOK
+
+.INCLUDE /ccmacr.inc/
+
+
+
+
+PACHR1:	.NEXTB
+PACHR2:	CMPB	R1, #'\
+	BNE	9$
+	MOV	#ESCTAB, R2
+	.NEXTB
+1$:	CMPB	(R2)+, R1
+	BEQ	3$
+	TSTB	(R2)+
+	BNE	1$
+	MOV	#$SCRAT, R2
+	MOV	R2, R4
+	MOV	#8., R3
+	.isdigit
+	BEQ	4$
+	MOVB	R1, (R4)+
+	.NEXTB
+	.isdigit
+	BEQ	5$
+	MOVB	R1, (R4)+
+	.NEXTB
+	.isdigit
+	BNE	7$
+5$:	.UNGET
+	BR	6$
+4$:	CMPB	R1, #'x
+	BNE	9$
+	ASL	R3			; R3: 16.
+	.NEXTB              		; \xDD
+	MOVB	R1, (R4)+
+	.NEXTB
+7$:	MOVB	R1, (R4)+
+6$:	CLRB	(R4)
+	MOV	R2, R1
+	.SUBRC	strtol
+	MOV	R0, (R2)
+3$:	MOVB	(R2), R1
+9$:	RETURN
+
+
+PAOCT:	MOV	#8., R3
+	BR	PAINT
+
+;; Read char into R1.
+;; OUTPUT: CF=0 on EOF. Set ZF=0 if isspace()
+RCH::	R.CHR
+	BEQ	8$
+	.isspace
+	SEC
+	RETURN
+8$:	CLC
+	RETURN
+
+
+PANUM:	CLR	R2		; Is Float flag
+	MOV	#TOKTYP, R4
+	MOVB	#T.LINT, (R4)
+	MOV	#10., R5	; R5: base
+	CMPB	R1, #'0
+	BNE	PANU1
+	TST	-(R5)		; R5: 8.
+	R.CHR
+	BEQ	PANU8
+	CMPB	R1, #'X
+	BEQ	16$
+	CMPB	R1, #'x
+	BNE	PANU7
+16$:	ASL	R5		; R5: 16.
+	BR	PANU2
+
+PANU3:	CMP	R5, #16.
+	BEQ	PANU1
+	MOVB	R1, (R3)+
+	G.CHR
+PANU4:	INC	R2		; Set Float flag
+PANU1:	MOVB	R1, (R3)+
+PANU2:	R.CHR
+	BEQ	PANU8
+PANU7:	switch
+	case	'.	, PANU4
+	case	'E	, PANU3
+	case	'e	, PANU3
+	case	'L	, PANUL
+	case	'l	, PANUL
+	case	'U	, PANU8
+	case	'u	, PANU8
+	default
+	.isxdigit
+	BNE	PANU1
+	.UNGET
+PANU8:	CLRB	(R3)+
+	MOV	#$SCRAT, R1
+	TST	R2
+	BEQ	PAINT5		; Integer, R5: radix
+	MOVB	#T.LFLT, (R4)	; TOKTYP
+	CALL	atof
+	BR	PAINT6
+PANUL:	IF.CHR	'L, 1$		; LL suffix
+	IF.CHR	'l, 1$
+1$:	DECB	(R4)		; TOKTYP: T.LLNG
+	BR	PANU8
+
+PADEC:  MOV	#10., R5
+PAINT5:	MOV	R5, R3
+PAINT::	CLR	R2
+	CLR	R0
+	CALL	strtol
+PAINT6:	MOV	R0, TOKVA0
+	MOV	R1, TOKVA1
+	MOVB	(PC)+, R1
+TOKTYP::.WORD	0
+	BR	PARE.B
+
+
+PADOT1:	PUSH	#T.3DOT
+	IF.CHR	'., PAID
+	.ERR	13.
+
+PADOT:	R.CHR
+	BEQ	RTOK6
+	switch
+	case	'., PADOT1
+	default
+	.isdigit
+	BEQ	RTOK5
+	.UNGET
+	MOV	#TOKTYP, R4	; R2: '. here (Float flag)
+	BR	PANU1
+
+
+RTOKSP: CMP	R1, #C.NL
+	BNE	1$
+;!!!?	CLR	NSLINE
+	TSTB	IS.PP
+	BEQ	1$
+	.UNGET
+	CLR	R1
+	BR	RTOK9		; Preprocessor reads tokens until EOL
+1$:	MOV	#T.SP, R1
+	TST	(PC)+
+IS.OPE::.WORD	0		; Option -E
+	BNE	PARE
+RTOK::	CLR	ASCII + 2
+	CLR	INTOK
+	CALL	RCH
+	BCC	RTOK9
+	BNE	RTOKSP		; Skip Whitespace
+	MOV	SP, INTOK
+	MOVB	R1, R2
+	MOV	#$SCRAT, R3
+	switch
+	case	'_	, RSYM
+	case	''	, PACHR
+	case	'"	, PASTR
+	case	'.	, PADOT
+	case	'#	, PSHARP
+	default
+	.SUBRC	isalpha
+	BNE	RSYM
+	.isdigit
+	BNE	PANUM
+	R.CHR
+	SWAB	R1
+	BISB	R2, R1
+	F.WORD			; Long Tokens
+	.WORD	"<<, ">>, "++, "--, "&&, "||, "+=, "-=, "*=, "/=, "%=, "&=, "|=, "^=, "==, "!=, "<=, ">=, "->, 0
+	BCC	RTOK4
+	DEC	R1
+	BGT	5$
+	IF.CHR	'=, 7$		; <<= or >>=
+5$:	ASL	R1
+	MOV	TOKS2+2(R1), R1
+7$:	ADD	#T.LSHA+1, R1
+PARE.B:	BR	PARE
+
+
+
+;; R2: char
+RTOK4:	SWAB	R1
+RTOK5:	.UNGET
+RTOK6:	MOV	#TOKCH1, R1
+	CALL	strchr
+	BEQ	ERR.D
+	CMP	R0, #TOKCH2
+	BLO	1$
+	ASL	R0
+	MOV	TOKS1-<TOKCH2*2>(R0), R2
+1$:	MOV	R2, R1
+PARE:	PUSH	R1		; End of Token
+PAID:	PU.BZ	ASCII
+	POP	R1
+RTOK9:	MOV	R1, NX.TOK
+	RETURN
+
+RTOK2:
+;	PU.BZ	TMP
+;!!!R	MOV	TMP, $SCRAT
+;	MOV	TMP, TOKVA0	;!!!?
+RET.C:	RETURN
+
+
+
+
+PACHR:	PUSH	R1		; PUSH #T.LINT
+	CALL	PACHR1
+	MOV	R1, TOKVA0
+	.NEXTB
+	switch
+	case	'', PAID.A
+	default
+ERR.D:	.ERR	13.
+
+
+RSYM:	MOVB	R1, (R3)+
+	CMP	R3, #$SCRAT+16
+	BLO	1$			;!!!O
+	DEC	R3
+1$:	R.CHR
+	.SUBRC	isalnum
+	BNE	RSYM
+	CMPB	R1, #'_
+	BEQ	RSYM
+	CLRB	(R3)+
+	.UNGET
+	A.R50
+	TST	(PC)+
+NO.EXP::.WORD	0		; Expansion disabled
+	BNE	RSYM2
+	CALL	TRYEXP
+	BNE	RTOK
+RSYM2:	PUSH	#T.SYM
+	TSTB	IS.PP
+	BNE	PAID
+	F.DWORD
+	.RAD50	"enum  ""struct""union ""char  ""const ""contin""defaul""do    "
+	.RAD50	"double""else  ""auto  ""extern""float ""for   ""goto  ""if    ""inline"
+	.RAD50	"int   ""long  ""regist""return""short ""signed""sizeof""static""break "
+	.RAD50	"switch""typede""case  ""unsign""void  ""volati""while "
+	.WORD	0
+	BCC	PAID
+	INC	R1		; T.AUTO == 1
+	MOV	R1, (SP)
+PAID.A:	BR	PAID
+
+PSHARP:	IF.CHR	'#, PSHSH
+RTOK2.B:BR	RTOK2
+PSHSH:	INC	R1		; R1: T.SHSH
+	BR	RTOK2
+
+PASTR:	PUSH	R1		; PUSH #T.LSTR
+	CLR	TMP + 2		; Clear previous token
+1$:	.NEXTB
+	switch
+	case	'"	, PAID.A
+	default
+	CALL	PACHR2
+	PUSH.B	TMP
+	BR	1$
+
+
+
+.RDATA
+.EVEN
+
+;; 1-char tokens
+TOKS1:	.WORD	T.LNOT	; !
+	.WORD	T.MOD	; %
+	.WORD	T.AND	; &
+	.WORD	T.AST	; *
+	.WORD	T.ADD	; +
+	.WORD	T.SUB	; -
+	.WORD	T.DIV	; /
+	.WORD	T.LT	; <
+	.WORD	T.ASGN	; =
+	.WORD	T.GT	; >
+	.WORD	T.TERN	; ?
+	.WORD	T.XOR	; ^
+	.WORD	T.OR	; |
+
+
+;; Multi-char tokens
+T2OFF	= T.LSHA+1
+TOKS2:	.WORD	T.LSH-T2OFF	, T.RSH-T2OFF	, T.INCR-T2OFF	, T.DECR-T2OFF	, T.LAND-T2OFF	, T.LOR-T2OFF	, T.ADDA-T2OFF	, T.SUBA-T2OFF
+	.WORD	T.MULA-T2OFF	, T.DIVA -T2OFF	, T.REMA-T2OFF	, T.ANDA-T2OFF	, T.ORA-T2OFF	, T.XORA-T2OFF	, T.EQ-T2OFF	, T.NE-T2OFF
+	.WORD	T.LTEQ-T2OFF	, T.GTEQ-T2OFF	, T.ARRO-T2OFF
+
+ESCTAB:	.BYTE	'a, C.BEL
+	.BYTE	'b, C.BS
+	.BYTE	'n, C.NL
+	.BYTE	'r, C.CR
+	.BYTE	'f, C.FF
+	.BYTE	't, C.HT
+	.BYTE	'v, C.VT
+	.BYTE	'e, C.ESC
+	.BYTE	0, 0
+
+;--  Must be adjacent. Used in RTOK4
+TOKCH1:	.ASCII	"~.,:;()[]{}"		; Token with value equal to ASCII code
+TOKCH2:	.ASCIZ	"!%&*+-/<=>?^|"
+;--
+
+
+;.PSECT	.data
+
+;.EVEN
+
+;!!!R IS.ARG::.WORD	0		; 1: parsing		;!!!?
+
+
+
+
+.END

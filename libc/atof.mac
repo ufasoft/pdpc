@@ -1,0 +1,104 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	ATOF
+
+.INCLUDE /macros.inc/
+
+.GLOBL	$MUL5, $DIV5, $STRTO
+
+
+.PSECT	.text
+
+;; double atof(const char*)
+atof::
+	JSR	R4, $STRTO		; (SP): sign
+	CLR	-(SP)			; point flag
+	MOV	#32., -(SP)		; 2exponent
+	CLR	R4			; R4: 10exponent
+	MUL	R4, R2			; R2:R3 = 0
+LOOP1:	switch
+	case	'.	, POINT
+	case	'E	, EXPO
+	case	'e	, EXPO
+	default
+	.isdigit
+	BEQ	CONVER			; Convert from decimal exponent to binary
+	CMP	R2, #32767./10.
+	BHI	1$
+	SUB	#'0, R1
+	CALL	$MUL5
+	ASL	R3
+	ROL	R2
+	ADD	R1, R3
+	ADC	R2
+	TST	2(SP)			; point flag
+	BEQ	LOOP
+	DEC	R4
+	BR	LOOP
+1$:	TST	2(SP)			; point flag
+	BNE	LOOP
+	INC	R4
+LOOP:	MOVB	(R5)+, R1
+	BR	LOOP1
+
+POINT:	INC	2(SP)
+	BR	LOOP
+
+EXPO:	MOV	R5, R1
+	.SUBRC	atoi
+	ADD	R0, R4		; 10exponent
+CONVER:	ASHC	#0, R2
+	BEQ	FINISH		; Return 0
+CKDN:	TST	R4
+	BLT	PULLUP
+	BGT	PULLDN
+;; Normalize
+;; R4==0 here
+NORMAL:	DEC	(SP)
+	ASL	R3
+	ROL	R2
+	BPL	NORMAL
+	ADD	#128., (SP)
+	BGT	1$
+	MUL	R4, R2		; R2:R3 = 0
+	BR	FINISH
+1$:	SWAB	(SP)
+	BNE	ERR.6
+	ASHC	#-7., R2
+	MOVB	R2, (SP)
+	MOV	(SP), R2
+	ROR	4(SP)		; Sign
+	ROR	R2
+	ROR	R3
+FINISH:	ADD	#6, SP
+	MOV	R2, R0
+	MOV	R3, R1
+	RETURN
+
+
+PULLD1:	CALL	$MUL5
+	DEC	R4
+	BR	INCDN
+PULLDN:	CMP	R2, #32767./5
+	BLOS	PULLD1
+	ROR	R2
+	ROR	R3
+INCDN:	INC	(SP)
+	BR	CKDN
+
+PULLUP: DEC	(SP)
+	ASL	R3
+	ROL	R2
+	BPL	PULLUP
+	CALL	$DIV5
+	DEC	(SP)
+	BR	CKDN
+
+
+ERR.6:	.ERR	6			; Overflow
+
+
+.END

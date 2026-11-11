@@ -1,0 +1,418 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	TIME
+
+.INCLUDE /macros.inc/
+
+.GLOBL	R50TOA
+
+.PSECT	.text
+
+
+;; clock_t clock(void)
+clock::
+	MOV	#$SCRAT, R2
+	.GTIM	R2, R2
+	MOV	(R2)+, R1
+	MOV	(R2), R0
+	RETURN
+
+;; time_t mktime(struct tm* timeptr)
+mktime::
+	MOV	R1, R4		; R4: timeptr
+	ADD	#6, R4
+	MOV	(R4)+, R0	; tm_mday
+	DEC	R0
+	MOV	(R4)+, R1	; tm_mon
+	BEQ	2$
+1$:	MOVB	DAYMON-1(R1), R2
+	ADD	R2, R0
+	SOB	R1, 1$
+2$:	MOV	(R4), R1	; R1: tm_year
+	MOV	R1, R3		; R3: tm_year
+	PUSH	R1		; (SP): tm_year
+	ASH	#14., R1
+	BNE	3$		; non-leap year
+	CMP	#1, -2(R4)	; Mar or later month?
+	ADC	R0		; Add a leap day
+3$:	MOV	R0, 4(R4)	; tm_yday
+	ASR	(SP)
+	ASR	(SP)		; (SP): tm_year/4
+	SUB	#17., (SP)
+	MOV	R3, R2
+	SUB	#70., R2	; R3: years since 1970
+	MUL	#365., R2	; R2:0
+	ADD	(SP)+, R3
+	ADD	R0, R3		; R3: days since 1970
+	PUSH	R3
+	ADD	#4, R3		; 1970-1-1 was Thursday
+	DIV	#7, R2
+	MOV	R3, 2(R4)	; tm_wday
+	CMP	-(R4), -(R4)	; R4 points after `tm_hour` field
+	CLR	R1
+	MOV	#3, R0
+	MOV	#24., R5
+	POP	R2      	; R2: low part of result
+5$:	MUL	R5, R2
+	BPL	6$
+	ADD	R5, R2
+6$:	ADD	-(R4), R3	; += tm_hour, tm_min, tm_sec sequentially
+	ADC	R2
+	MUL	R5, R1		; R1: high part of result
+	ADD	R2, R1
+	MOV	#60., R5
+	MOV	R3, R2 		; R2: low part of result
+	SOB	R0, 5$
+	MOV	R3, R0
+	RETURN
+
+
+;; time_t time(time_t* arg)
+
+TIME1:	MOV	R0, R2
+	.SUBRC	clock		; Get timestamp in $SCRAT
+time::	.DATE
+	SUB	R0, R2
+	BNE	TIME1		; rollover midnight
+	PUSH	R1		; R2:0 here
+	SUB	#6, SP		; tm_isdst, tm_yday, tm_wday
+	PUSH	R0
+	BIC	#177740, (SP)
+	MOV	R0, R3
+	ASH	#-9., R3
+	BIC	#177637, R3
+	BIS	R3, (SP)
+	ADD	#72., (SP)	; tm_year
+	MOV	R0, R1
+	ASH	#-10., R1
+	BIC	#177760, R1
+	DEC	R1
+	PUSH	R1		; tm_mon
+	ASH	#-5, R0
+	BIC	#177740, R0
+	PUSH	R0		; tm_mday
+	MOV	$SCRAT, R0
+	MOV	$SCRAT+2, R1
+	DIV	(PC)+, R0
+CLKMIN::.WORD	60. * 60.	; Hz per minute
+	MOV	R0, R3
+	CLR	R0
+	DIV	(PC)+, R0
+CLK::	.WORD	60.		; Hz
+	DIV	#60., R2	; R2==0 here
+	PUSH	R2, R3, R0	; tm_hour, tm_min, tm_sec
+	MOV	SP, R1
+	CALL	mktime
+	ADD	#18., SP	; sizeof(tm)
+	POP	R2
+	BEQ	9$
+	MOV	R0, (R2)+
+	MOV	R1, (R2)
+9$:	RETURN
+
+;; struct tm* localtime(const time_t*)
+localtime::
+	MOV	timezone, R3
+	MOV	timezone+2, R2
+	BR	GMTIM1
+
+;; struct tm* gmtime(const time_t* timer)
+gmtime::
+	MUL	R0, R2		; Clear R3:R2
+GMTIM1:	ADD	(R1)+, R3
+	ADC	R2
+	ADD	(R1), R2
+	MOV	#TM.SEC, R0
+	MOV	R3, (R0)	; tm_sec
+	BIC	#177774, (R0)	; tm_sec % 4
+	ASHC	#-2, R2		; (R2:R3): number of 4-s intervals
+	DIV	#24.*60.*15., R2 ; R2: days since epoch, R3: 4-s time of day
+	PUSH	R2		; day since epoch
+	CLR	R2
+	DIV	#15., R2
+	ASL	R3
+	ASL	R3
+	ADD	R3, (R0)+	; TM.SEC
+	MOV	R2, R3
+	CLR	R2
+	DIV	#60., R2
+	MOV	R3, (R0)+	; TM.MIN
+	MOV	R2, (R0)+	; TM.HOUR
+	MOV	(SP), R3	; R3: day since epoch
+	CLR	R2
+	DIV	#365.*4+1, R2	; R2: number of 4-year cycles
+	ASL	R2
+	ASL	R2
+	ADD	#70., R2
+	PUSH	R2
+	CLR	R2
+	DIV	#365., R2
+	ADD	(SP)+, R2
+	MOV	R3, TM.YDAY
+	BIT	#3, R2
+	BNE	2$
+	INCB	FEBRUA		; leap year
+2$:	MOV	#DAYMON, R1
+3$:	MOVB	(R1)+, R4
+	SUB	R4, R3
+	BHIS	3$
+	MOVB	#28., FEBRUA
+	ADD	R4, R3
+	INC	R3
+	MOV	R3, (R0)+	; TM.MDAY
+	SUB	#DAYMON+1, R1
+	MOV	R1, (R0)+	; TM.MON
+	MOV	R2, (R0)+	; TM.YEAR
+	POP	R3		; R3: day since epoch
+	ADD	#4, R3		; 1970-1-1 was Thursday
+	CLR	R2
+	DIV	#7, R2
+	MOV	R3, (R0)+	; TM.WDAY
+	MOV	#TM.SEC, R0
+	RETURN
+
+;; size_t strftime(char* s, size_t maxsize, const char* format, const struct tm*)
+strftime::
+	PUSH	R1
+	ADD	R2, (SP)	; (SP): Upper bound
+	BCC	1$
+	MOV	#-1, (SP)
+1$:	PUSH	R2, R1, R3
+	MOV	R4, R3		; R3: tm*
+	MOV	R1, R4		; R4: s (output pointer)
+STRFT3:	POP	R5		; R5: format
+	MOVB	(R5)+, R1	; R1 = *format++
+	BEQ	8$
+	CMPB	R1, #'%
+	BEQ	2$
+	PUSH	R5		; (SP): format
+	CALL	SAMECH
+	BR	STRFT3
+8$:	MOV	R4, R0
+	SUB	(SP)+, R0
+	CMP	(SP)+, (SP)+
+	RETURN
+
+2$:	MOVB	(R5)+, R1	; R1 = *format++
+	BEQ	8$
+	PUSH	R5		; (SP): format
+	PUSH	#STRFT3
+	MOV	#PCHR, R5
+3$:	switch
+	case	'%	, SAMECH
+	case	'a	, WDAY3
+	case	'b	, MON3
+	case	'C	, CENTU2
+	case	'D	, MDY
+	case	'd	, DAY02
+	case	'e	, DAY2
+	case	'F	, YMD
+	case	'H	, HOUR24
+	case	'h	, MON3
+	case	'I	, HOUR12
+	case	'j	, YDAY3
+	case	'M	, MIN2
+	case	'm	, MON2
+	case	'n	, NL
+	case	'p	, AMPM
+	case	'R	, H2M2
+	case	'r	, IMSP
+	case	'S	, SEC2
+	case	'T	, HMS
+	case	't	, HT
+	case	'u	, WDAY17
+	case	'w	, WDAY06
+	case	'X	, HMS
+	case	'Y	, Y4
+	case	'y	, Y2
+	default
+RET.C:	RETURN
+
+
+IMSP:	CALL	HOUR12
+	CALL	CMIN2
+	CALL	CSEC2
+	JSR	R5, (R5)
+	.WORD	C.SP
+AMPM:	MOV	#FMTAM, R2
+	CMP	4(R3), #12.	; tm_hour
+	BLO	PSPRIN
+	MOV	#FMTPM, R2
+	BR	PSPRIN
+
+HT:	ADD	#C.HT-C.NL+'n-'t, R1
+NL:	ADD	#C.NL-'n, R1
+SAMECH:	MOVB	R1, R0
+	MOV	#FMTC, R2
+	BR	PSPRIN
+
+PCHR:	MOV	(R5)+, R1
+	CALL	SAMECH
+	RTS	R5
+
+CENTU2:	MOV	10.(R3), R1	; tm_year
+	ADD	#1900., R1
+	CLR	R0
+	DIV	#100., R0
+	BR	P02D
+HMS:	CALL	H2M2
+CSEC2:	JSR	R5, (R5)
+	.WORD	':
+SEC2:	MOV	(R3), R0	; tm_sec
+	BR	P02D
+H2M2:	MOV	4(R3), R0	; tm_hour
+	CALL	P02D
+CMIN2:	JSR	R5, (R5)
+	.WORD	':
+MIN2:	MOV	2(R3), R0	; tm_min
+	BR	P02D
+HOUR12:	MOV	4(R3), R0	; tm_hour
+	BEQ	1$
+	SUB	#12., R0
+	BGT	P02D
+1$:	ADD	#12., R0
+	BR	P02D
+HOUR24:	MOV	4(R3), R0	; tm_hour
+	BR	P02D
+MDY:	CALL	MON2
+	JSR	R5, (R5)
+	.WORD	'/
+	CALL	DAY02
+	JSR	R5, (R5)
+	.WORD	'/
+Y2:	MOV	10.(R3), R0	; tm_year
+	BR	P02D
+YMD:	CALL	Y4
+	JSR	R5, (R5)
+	.WORD	'-
+	CALL	MON2
+	JSR	R5, (R5)
+	.WORD	'-
+DAY02:	MOV	6(R3), R0	; tm_mday
+	BR	P02D
+DAY2:	MOV	6(R3), R0	; tm_mday
+	BR	P2D
+MON2:	MOV	8.(R3), R0	; tm_month
+P02D:	MOV	#FMT02D, R2
+	BR	PSPRIN
+YDAY3:	MOV	14.(R3), R0	; tm_yday
+	MOV	#FMT03D, R2
+	BR	PSPRIN
+P2D:	MOV	#FMT2D, R2
+	BR	PSPRIN
+
+WDAY17:	MOV	12.(R3), R0	; tm_wday
+	BNE	WDAY06
+	MOV	#7, R0
+	BR	PWDAY
+WDAY06:	MOV	12.(R3), R0	; tm_wday
+PWDAY:	MOV	#FMTW, R2
+	BR	PSPRIN
+
+Y4:	MOV	#FMTY4, R2
+PYEAR:	MOV	10.(R3), R0	; tm_year
+	ADD	#1900., R0
+PSPRIN:	PUSH	R3
+	MOV	R4, R1
+	MOV	R2, R3
+	MOV	R0, R4
+	MOV	10.(SP), R2	; upper bound
+	SUB	R1, R2		; remaining
+	BLOS	8$
+	.SUBRC	snprintf
+	ADD	R0, R1
+8$:	MOV	R1, R4
+	POP	R3
+	RETURN
+
+
+
+WDAY3:	MOV	12.(R3), R0	; tm_wday
+	JSR	R5, PRAD50
+WDAYS:	.RAD50	/SunMonTueWedThuFriSat/
+
+MON3:	MOV	8.(R3), R0	; tm_month
+	DEC	R0
+	JSR	R5, PRAD50
+MONTHS:	.RAD50	/JanFebMarAprMayJunJulAugSepOctNovDec/
+
+;; Decodes RADIX-50 representation as Pascal-case 3-char string
+PRAD50:	TST	(SP)+
+	ASL	R0
+	ADD	R0, R5
+	MOV	(R5), R1
+	JSR	R5, R50TOA
+	BISB	#40, -(R4)	; Convert two last chars to lowercase
+	BISB	#40, -(R4)
+	CMPB	(R4)+, (R4)+	; R4 += 2
+	RETURN
+
+
+
+;; char *ctime(const time_t*)
+ctime::
+	CALL	localtime
+	MOV	R0, R1
+			; Fallthrough
+;; char* asctime(const struct tm* time_ptr)
+asctime::
+	MOV	R1, R4
+	MOV	(PC)+, R1
+ASCBUF:	.WORD	0
+	BNE	1$
+	.CALLOC	26.
+	MOV	R0, ASCBUF
+	MOV	R0, R1
+1$:	MOV	#26., R2
+	MOV	#FMTASC, R3
+	.SUBRC	strftime
+	MOV	R1, R0
+	RETURN
+
+
+.RDATA
+
+FMTASC:	.ASCIZ	"%a %b %e %H:%M:%S %Y"<C.NL>
+FMT2D:	.ASCIZ	"%2d"
+FMT02D:	.ASCIZ	"%02d"
+FMT03D:	.ASCIZ	"%03d"
+FMTY4:	.ASCIZ	"%04d"
+FMTW:	.ASCIZ	"%d"
+FMTC:	.ASCIZ	"%c"
+FMTAM:	.ASCIZ	"AM"
+FMTPM:	.ASCIZ	"PM"
+
+
+
+.PSECT	.data
+
+;; Days per month
+DAYMON:	.BYTE	31.
+FEBRUA:	.BYTE	28.
+	.BYTE	31., 30., 31., 30., 31., 31., 30., 31., 30. ;, 31.
+
+
+.PSECT	.bss
+
+.EVEN
+
+;; Static struct tm instance
+TM.SEC:	.WORD	0
+TM.MIN:	.WORD	0
+TM.HOUR:.WORD	0
+TM.MDAY:.WORD	0
+TM.MON:	.WORD	0
+TM.YEAR:.WORD	0
+TM.WDAY:.WORD	0
+TM.YDAY:.WORD	0
+TM.ISDST:.WORD	0
+
+timezone::
+	.WORD	0, 0
+
+
+
+.END

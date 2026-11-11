@@ -1,0 +1,50 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	RENAME
+
+.INCLUDE /macros.inc/
+
+.GLOBL	errno
+.GLOBL	PA$FN, R$EOF
+
+TESTCH	= 0		; Channel, always available for short-time operations
+
+
+.PSECT	.text
+
+;; int remove(const char* filename)
+remove::
+	MOV	#$DEVBL, R4
+	CALL	PA$FN
+	BCS	R.EOF
+	.DELETE	#$AREA, #TESTCH, #$DEVBLK
+REMOV1:	BCC	1$
+	MOVB	$ERRBY, R0
+	MOVB	$DELER(R0), R0
+	MOV	R0, errno
+	RETURN
+1$:	CLR	R0
+	RETURN
+
+;; int rename(const char* oldfn, const char* newfn)
+rename::
+	PUSH	R1
+	MOV	R2, R1
+	MOV	#$DEVBL+8., R4
+	CALL	PA$FN
+	POP	R1
+	BCS	R.EOF
+	MOV	#$DEVBL, R4
+	CALL	PA$FN
+	BCS	R.EOF
+	.RENAME	#$AREA, #TESTCH, #$DEVBLK
+	BR	REMOV1
+R.EOF:	JMP	R$EOF
+
+.RDATA
+$DELER::.BYTE	EBADF, ENOENT, EINVAL, EPERM
+
+.END

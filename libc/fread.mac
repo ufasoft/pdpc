@@ -1,0 +1,73 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	FREAD
+
+.INCLUDE /macros.inc/
+
+.PSECT	.text
+
+;; size_t fread(void* buffer, size_t size, size_t count, FILE* stream)
+fread::
+	MUL	R2, R3
+	BEQ	RET.A
+	PUSH	R2		;!!!? Where it is restored?
+	MOV	R1, R5
+	MOV	R4, R1
+2$:	.fgetc
+	BMI	R.FREA
+	MOVB	R0, (R5)+
+	SOB	R3, 2$
+R.FREA::SUB	(SP)+, R5
+	CLR	R4
+	DIV	(SP)+, R4
+	NEG	R5
+	MOV	R5, R2
+	CLR	R3
+	PUSH	R4
+	TST	R2
+	BEQ	8$		; All data written
+	MOV	#1, R4
+	.fseek			; fseek(stream, -reminder, SEEK_CUR);
+8$:	POP	R0
+	RETURN
+
+;; int fileno(FILE *stream)
+fileno::
+	MOVB	1(R1), R0
+RET.A:	RETURN
+
+;; long ftell(FILE *stream)
+ftell::
+	TST	(R1)+
+	MOV	(R1)+, R0
+	MOV	(R1), R1
+	RETURN
+
+;; int feof(FILE* stream)
+feof::
+	TSTB	(R1)		; Check FILE.flags for F.EOF
+	SXT	R0
+	RETURN
+
+;; int ferror(FILE*)
+ferror::
+	MOVB	(R1), R0
+	MOV	R0, R2		; error code
+	BIC	#^CF.ERR, R0	; Clear status bits except F.ERR
+	BEQ	9$
+	BIC	#177700, R2
+	MOVB	R2, errno
+9$:	RETURN
+
+
+;; void clearerr(FILE*)
+clearerr::
+	BICB	#F.EOF!F.ERR, (R1)
+	RETURN
+
+
+
+.END

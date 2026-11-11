@@ -1,0 +1,178 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	STRING
+
+.INCLUDE /macros.inc/
+
+.PSECT	.text
+;.ASECT
+;. = 23000
+
+;; size_t strlen(const char* str);
+strlen::
+	INC	R0
+	TSTB	(R1)+
+	BNE	strlen
+	BR	MEMCH8		; return --R0
+
+;; int isspace(int ch)
+isspace::
+	MOV	R1, R2
+	MOV	#SPACES, R1
+			; Fallthrough
+;; char* strchr(const char* str, int ch)
+strchr::
+	MOVB	(R1)+, R0
+	BEQ	RET.A
+	CMPB	R0, R2
+	BNE	strchr
+	BR	$RERM1
+
+;; char* strrchr(const char* str, int ch)
+strrchr::
+	.strlen
+	BEQ	9$
+	ADD	R0, R1
+1$:	CMPB	-(R1), R2
+	BEQ	RET.R1
+	SOB	R0, 1$
+9$:	RETURN
+
+
+;; void* memchr(const void* ptr, int ch, size_t count)
+memchr::
+	DEC	R3
+	BMI	RET.A
+	CMPB	(R1)+, R2
+	BNE	memchr
+$RERM1::MOV	R1, R0
+MEMCH8:	DEC	R0
+RET.A:	RETURN
+
+
+;; char *strcat(char* dest, const char* src);
+strcat::
+	MOV	#100000, R3
+;; char* strncat(char* dest, const char *src, size_t count)
+strncat::
+	MOV	R1, R0
+1$:	TSTB	(R1)+
+	BNE	1$
+	DEC	R1
+2$:	DEC	R3
+	BMI	8$
+	MOVB	(R2)+, (R1)+
+	BNE	2$
+	DEC	R1
+8$:	CLRB	(R1)
+	RETURN
+
+
+;; void* memset(void* dest, int ch, size_t count)
+memset::
+	MOV	R1, R0
+1$:	DEC	R3
+	BMI	RET.A
+	MOVB	R2, (R1)+
+	BR	1$
+
+;; int strcmp(const char* lhs, const char* rhs)
+strcmp::
+	MOV	#100000, R3
+			; Fallthrough
+;; int strncmp(const char* lhs, const char* rhs, size_t count)
+strncmp::
+	DEC	R3
+	BMI	9$
+	MOVB	(R1)+, R4
+	CMPB	R4, (R2)+
+	BNE	MEMCM2
+	TSTB	R4
+	BNE	strncmp
+9$:	RETURN
+
+
+;; char* strstr(const char* str, const char* substr)
+strstr::
+	.strlen
+	MOV	R0, R3		; R3: strlen(str)
+	TSTB	(R2)
+	BEQ	RET.R1
+1$:	MOVB	(R1), R0
+	BEQ	RET.B
+	.SUBRC	memcmp
+	BEQ	RET.R1
+	INC	R1
+	BR	1$
+
+
+;; char *strdup(const char *src)
+strdup::
+	MOV	R1, R2
+	.strlen
+	INC	R0
+	MOV	R0, R1
+	.MALLOC
+	BEQ	RET.B
+	MOV	R0, R1
+			; Fallthrough
+;; char* strcpy(char* dest, const char* src)
+strcpy::
+	MOV	R1, R0
+1$:	MOVB	(R2)+, (R0)+
+	BNE	1$
+RET.R1:	MOV	R1, R0
+RET.B:	RETURN
+
+
+;; int memcmp(const void* lhs, const void* rhs, size_t count)
+memcmp::
+	DEC	R3
+	BMI	RET.B
+	CMPB	(R1)+, (R2)+
+	BEQ	memcmp
+MEMCM2:	BLO	MEMCH8		; DEC R0; RETURN
+	INC	R0
+	RETURN
+
+;; void* memcpy(void* dest, const void* src, size_t count)
+memcpy::
+;; void* memmove(void* dest, const void* src, size_t count)
+memmove::
+	MOV	R1, R0
+	TST	R3
+	BEQ	9$
+	CMP	R1, R2
+	BLO	2$
+	ADD	R3, R1
+	ADD	R3, R2
+1$:	MOVB	-(R2), -(R1)
+	SOB	R3, 1$
+	RETURN
+2$:	MOVB	(R2)+, (R1)+
+	SOB	R3, 2$
+9$:	RETURN
+
+
+;; char *strrev(char *str)
+strrev::
+	.strlen
+	MOV	R1, R2
+	ADD	R0, R2		; R2: points behind the end
+	MOV	R1, R0		; Result is `str`
+1$:	CMP	R1, R2
+	BHIS	RET.B
+	MOVB	-(R2), R3
+	MOVB	(R1), (R2)
+	MOVB	R3, (R1)+
+	BR	1$
+
+.RDATA
+
+SPACES:	.BYTE	C.SP, C.NL, C.HT, C.CR, C.VT, C.FF, 0
+
+
+.END

@@ -1,0 +1,31 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	FWRITE
+
+.INCLUDE /macros.inc/
+
+.GLOBL	R.FREA
+
+.PSECT	.text
+
+;; size_t fwrite(const void* buffer, size_t size, size_t count, FILE* stream)
+fwrite::
+	MUL	R2, R3
+	BEQ	9$
+	PUSH	R2
+	MOV	R1, R5
+	MOV	R4, R2
+2$:	CLR	R1
+	BISB	(R5), R1
+	.fputc
+	BMI	8$
+	INC	R5
+	SOB	R3, 2$
+8$:	JMP	R.FREA
+9$:	RETURN			;!!!TODO Optimize
+
+
+.END

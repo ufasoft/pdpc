@@ -1,0 +1,189 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	SCANF
+
+.INCLUDE /macros.inc/
+
+.GLOBL	$RDINT
+
+.PSECT	.text
+
+;; Get from stream callback
+STMCB:	MOV	(PC)+, R1
+CURSTM:	.WORD	0	;SELF-MOD
+	JMP	fgetc
+
+;; Unget to stream
+STMUNG:	MOV	CURSTM, R2
+	JMP	ungetc
+
+STRGET:	MOVB	@CURSTM, R0
+	INC	CURSTM
+	RETURN
+
+;; Unget to stream
+STRUNG:	DEC	CURSTM
+	RETURN
+
+
+;;int sscanf(const char* buffer, const char* format, ...)
+sscanf::
+	MOV	SP, R3
+	ADD	#6, R3
+			; Fallthrough
+;; int vsscanf(const char* buffer, const char* format, va_list)
+vsscanf::
+	MOV	R1, CURSTM
+	MOV	#STRGET, INPC+2
+	MOV	#STRUNG, UNGC+2
+	MOV	R2, R4
+	MOV	R3, R5
+	BR	$VSCANF
+
+;; int fscanf(FILE* stream, const char* format, ...)
+fscanf::
+	MOV	SP, R3
+	ADD	#6, R3
+	BR	vfscanf
+
+;; int scanf(const char* format, ...)
+scanf::
+	MOV	SP, R2
+	CMP	(R2)+, (R2)+		; R2 += 4
+			; Fallthrough
+;; int vscanf(const char* format, va_list)
+vscanf::
+	MOV	R2, R3
+	MOV	R1, R2
+	MOV	stdin, R1
+			; Fallthrough
+;; int vfscanf(FILE*, const char* format, va_list)
+vfscanf::
+	MOV	#STMCB, INPC+2
+;; R4: format
+;; R5: va_list
+$VSCANF:
+	MOV	R1, CURSTM
+	PUSH	R5		; vsa_list
+	CLR	(PC)+
+CHRNUM:	.WORD	0
+
+SCLOOP:	MOVB	(R4)+, R1
+	BEQ	ESCAN
+	switch
+	case	C.SP	, SKIPSP
+	case	'%	, PERCENT
+	default
+SAMECH:	MOV	R1, R3
+	CALL	INCH
+	BLE	ESCAN
+	CMPB	R1, R3
+	BNE	ESCAN
+	BR	SCLOOP
+
+PERCENT:MOVB	(R4)+, R1
+	BEQ	ESCAN
+	CLR	R3
+	switch
+	case	'c	, SCACHR
+	case	'd	, SCADEC
+	case	'f	, SCAFLT
+	case	'i	, SCANUM
+	case	'n	, NUM
+	case	'o	, SCAOCT
+	case	'p	, SCAOCT
+	case	's	, SCASTR
+	case	'x	, SCAHEX
+	case	'%	, SAMECH
+	default
+	BR	SCLOOP
+
+
+SCAST1:	MOVB	R1, (R2)+
+SCASTR:	MOV	(R5)+, R2
+1$:	CALL	INCH
+	BLE	8$
+	.isspace
+	BNE	SCAST1
+	CALL	UNG
+8$:	CLRB	(R2)
+	BR	ESCAN
+
+
+SKIPS1:	MOV	R0, R1
+	.isspace
+	BEQ	UNG
+
+SKIPSP:	CALL	@INPC
+	BGT	SKIPS1
+ESCAN:	SUB	(SP)+, R5
+	ASR	R5
+	ASR	R5
+	MOV	R5, R0		; received args
+	RETURN
+
+
+UNG:	DEC	CHRNUM
+	CALL	@(PC)+
+UNGC:	.WORD	0		; unget-char callback
+	BR	SCLOOP
+
+
+SCACHR:	CALL	@INPC
+	BLE	ESCAN
+WRITV:	MOV	R0, @(R5)+
+	BR	SCLOOP
+
+
+NUM:	MOV	CHRNUM, R0
+	BR	WRITV
+
+
+SCADEC:	ADD	#10.-8., R3
+SCAOCT:	ADD	#8.-16., R3
+SCAHEX:	ADD	#16., R3
+SCANUM:	CALL	RNUSTR
+	CLR	R2
+	.SUBRC	strtol
+	BR	WRITV
+
+
+SCAFLT:	CALL	RNUSTR
+	CALL	atof
+	MOV	(R5)+, R2
+	MOV	R0, (R2)+
+	MOV	R1, (R2)+
+	BR	SCLOOP
+
+INCH:	CALL	@(PC)+
+INPC:	.WORD	0			; get-char callback
+	BLE	8$
+	INC	CHRNUM
+	MOV	R0, R1
+8$:	RETURN
+
+;; Read numeric string
+RNUSTR:	PUSH	R5
+	MOV	#$SCRAT, R5
+1$:	CALL	INCH
+	BLE	8$
+	MOV	R0, R1
+	switch
+	case	'-, 3$
+	case	'+, 3$
+	case	'., 3$
+	default
+	.SUBRC	isalnum
+	BEQ	UNG
+3$:	MOVB	R1, (R5)+
+	BR	1$
+8$:	CLRB	(R5)
+	POP	R5
+	MOV	#$SCRAT, R1
+	RETURN
+
+
+.END

@@ -1,0 +1,388 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com/pdpc  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	CC - C compiler for PDP-11 (RT-11 OS)
+.IDENT	/2026.0/
+
+C$CC	= 1
+
+
+
+.INCLUDE /macros.inc/
+.INCLUDE /ccmacr.inc/
+
+
+
+.GLOBL	ERREXI, PPDEF, PPCUR, OPNINP, PDECLS, PPDEF, GSD, SYMBS, VARS, ABSS, EBSS, OBJSTM, TYPES
+.GLOBL	TEXT, RDATA, RELOCS, DGSD, I.INVO, P.INVO
+
+.ASECT
+
+;. = $JSW
+;	.WORD	CHNIF$
+
+. = 1000
+
+
+;; Macro sefinitions
+MDEFS::
+
+
+5$:
+ERR.B:	.ERR
+
+
+. = 1000
+
+
+HELP:	.ASCII	"PDP C Compiler 2026.0 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
+        .ASCII	"Usage: CC [options] file.c"<C.NL>
+        .ASCII	"OPTIONS:"<C.NL>
+        .ASCII	" -c"<C.HT><C.HT>"Compile, but don't link"<C.NL>
+        .ASCII	" -D sym"<C.HT><C.HT>"Define sym=1"<C.NL>
+        .ASCII	" -E"<C.HT><C.HT>"Preprocess"<C.NL>
+        .ASCIZ	" -o fname"<C.HT>"Place output in fname"
+
+INVOPT::.ASCIZ	"Invalid option"
+
+.EVEN
+
+PHELP:	MOV	#HELP, R1
+	CALL	puts
+	JMP	EXIT
+
+
+MAIN::	MOV	10, P.INVO
+	MOV	#I.INVO, 10
+	; DEC	R1
+	; BEQ	PHELP		; argc == 1
+
+	MOV	R2, R4		; R4: argv
+	TST	(R4)+		; R4: &argv[1]
+4$:	MOV	(R4)+, R2
+	BEQ	PHELP
+	MOVB	(R2), R1
+	switch
+	case	'/, 1$
+	case	'-, 1$
+	default
+	JMP	PROCES
+1$:	MOVB	1(R2), R1
+	switch
+	case	'D	, 5$
+	case	'E	, 7$
+	case	'c	, 8$
+	case	'o	, 3$
+	default
+	MOV	#INVOPT, R1
+	CALL	puts
+9$:	.ERR	1
+
+5$:	CMPB	(R2)+, (R2)+
+	TSTB	(R2)
+	BNE	2$
+	MOV	(R4)+, R2
+	BEQ	9$
+2$:	MOV	R2, R1
+	MOV	#ONE, R2
+	.SUBRC	PPDEF
+	MOV	R0, EDEFS
+	BR	4$
+
+7$:	INCB	PPONL
+8$:	INCB	COONL
+	BR	4$
+3$:	MOV	(R4)+, OUTFN
+	BR	4$
+
+.IIF	GT . - 001500	.ERROR CC init code outs of bound
+
+
+
+.PSECT	.text
+
+;; Write Vector to .OBJ section
+OUVEC:	MOV	(R5)+, R0
+	MOV	(R0)+, R4
+	MOV	(R0), R0
+	INC	R0
+	ASR	R0
+	BEQ	2$		;!!!O?
+1$:	MOV	(R4)+, R3
+	OU.W
+	SOB	R0, 1$
+2$:	RTS	R5
+
+
+
+
+;; Outputs up to 128. bytes of TEXT to .OBJ
+;; RETURNS CF=1 if the TXT section was written
+OUTEXT: MOV	#TEXT+2, R0
+OUTSEC:	MOV	(PC)+, R3
+NXLDAD:	.WORD	0		; Next Address of the current 128.-byte .OBJ TXTsection
+	MOV	R3, (PC)+
+LDAD:	.WORD	0		; Address of the current 128.-byte .OBJ TXTsection
+	CMP	R3, (R0)	; CMP R3, vec+2
+	BHIS	9$
+	OU.BLK	BT.TXT
+	OU.W
+	MOV	R3, R4
+	MOV	(R0), R5	; MOV vec+2, R5
+	ADD	-(R0), R4	; ADD vec, R4
+	SUB	R3, R5
+	CMP	R5, #128.
+	BLO	5$
+	MOV	#128., R5
+5$:	MOVB	(R4)+, R3
+	OU.B
+	SOB	R5, 5$
+	SUB	(R0), R4	; SUB vec, R4
+	MOV	R4, NXLDAD
+	SEC
+9$:
+RET.C:	RETURN
+
+;; Change filename ext
+;; R1: filename, R3: new ext including dot
+CHEXT:	MOV	#'., R2
+	.SUBRC	strrchr
+	BEQ	RET.C
+	CLRB	(R0)
+	MOV	R3, R2
+	JMP	strcat
+
+ERR:	MOV	CURFN, R1
+ERR.R1:
+;!!!R ERR:	CLR	R1
+ERREXI::CALL	perror
+	MOV	errno, R1
+	JMP	exit
+	; Unreachable
+
+
+
+INIRLD:	OU.BLK	BT.RLD
+	MOV	#7, R3		;  Location Counter Definition
+	OU.W
+	MOV	(R5)+, R3
+	OU.W
+	MOV	(R5)+, R3
+	OU.W
+	CLR	R3
+	OU.W
+	RTS	R5
+
+COMPI5:	.TTYOUT	R1
+PREPRO:	PP.CHR		;!!!TODO Optimize. This is the only usage
+	BNE	COMPI5
+RET.B:	RETURN
+
+
+
+;; R2: Source filename
+PROCES:	MOV	R2, CURFN
+	MOV	(PC)+, R1
+EDEFS:	.WORD	0		;SELF-MOD End of command-line definitions
+	BEQ	1$
+	INC	R1
+	BIC	#1, R1
+	MOV	R1, $AHEAP	; Prevent cleaning -D definitions
+1$:
+;!!!R 	MOV	PPCUR, (PC)+
+;!!!R PPSAV:	.WORD	0		;SELF-MOD	 List of Preproceccor definitions before each compilation
+	MOV	#OBJFN, R1
+	.strcpy
+	TSTB	LINKE-1		; char after LINK:/EXE
+	BNE	PROCE1
+	MOV	(PC)+, R2
+OUTFN:	.WORD	0		;SELF-MOD	Output (.SAV) filename
+	BNE	1$
+	MOV	#SAVEXT, R3
+	.SUBRC	CHEXT
+	MOV	R1, R2
+1$:	PUSH	R1
+	MOV	#LINK, R1
+	.strcat
+	POP	R1
+PROCE1:	MOV	#OBJEXT, R3
+	.SUBRC	CHEXT
+
+COMPIL:
+	PUSH.W	TYPES, 0	; first WORD for `void`
+	MOV	(PC)+, R1
+CURFN:	.WORD	0		;SELF-MOD
+	CALL	OPNINP
+	BEQ	ERREXI
+	TST	(PC)+
+PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
+	BNE	PREPRO
+	MOV	#OBJFN, R1
+	MOV	#WMODE, R2
+	.fopen
+	BEQ	ERR.R1
+	MOV	R0, OBJSTM
+
+	MOV	$DEVBL+2, R1	; Module name
+	MOV	$DEVBL+4, R2
+	CLR	R3
+	CALL	DGSD
+
+	.GSD	<. ABS.>, 5, 104, 0
+	.GSD	<.text >, 5, 40, 0	; Relocatable I-section
+
+;!!!R	PUSH.W	TEXT		; Reserve for .START reference
+;!!!R	.GSD	<.start>, 4, 100, 0	; Global Symbol `_start` to link CRT0.OBJ
+
+	CALL	PDECLS
+
+
+;!!!T	.GSD	<.rdata>, 5, 40, 0	; Relocatable I-section
+	.GSD	<.rdata>, 5, 260, 0	; Relocatable read-only D-section
+
+	MOV	GSD, R3
+	MOV	TEXT+2, 26(R3)		; Write `Maximum length` field of .text P-Sect entry in GSD
+	ADD	GSD+2, R3
+	MOV	RDATA+2, -(R3)		; Write `Maximum length` field of .rdata P-Sect entry in GSD
+
+
+;; Write Transfer Address
+	.GSD	<. ABS.>, 3, 10, 1	; Transfer Address
+
+	OU.BLK	BT.GSD
+	JSR	R5, OUVEC
+	.WORD	GSD
+
+	OU.BLK	BT.EGS
+
+;; Write init RLD
+	JSR	R5, INIRLD
+	.RAD50	/.text/
+
+;; Write TXTs and RLDs
+	MOV	RELOCS, R5
+	PUSH	R5
+	ADD	RELOCS+2, (SP)	; (SP): Pointer to the End of RELOCS
+1$:	.SUBRC	OUTEXT
+	OU.BLK	BT.RLD
+2$:	CMP	R5, (SP)
+	BHIS	3$
+	CMP	(R5), NXLDAD
+	BHIS	1$
+	MOV	(R5)+, R3
+	SUB	LDAD, R3
+	SWAB	R3
+	MOV	(R5)+, R2
+	BMI	4$		; .rdata
+	MOV	R2, R1		; R1: Symbol
+	.FIND2	VARS
+	BCC	11$
+	TST	(R4)
+	BMI	9$		; Declared but not-defined Symbol
+	ADD	#2001, R3	; Internal relocation
+	MOV	R4, R2		; R2: address of Offset field in VARS record
+	BR	12$
+9$:	MOV	-4(R4), R2	; R2: Symbol
+11$:	ADD	#2002, R3	; Global relocation
+	ADD	SYMBS, R2
+	OU.W
+	MOV	(R2)+, R3
+12$:	OU.W
+	MOV	(R2)+, R3
+10$:	OU.W
+	BR	2$
+4$:	ADD	#2015, R3	; Additive relocation
+	OU.W
+	MOV	#^R.rd, R3
+	OU.W
+	MOV	#^Rata, R3
+	OU.W
+	COM	R2
+	MOV	R2, R3
+	BR	10$
+
+3$:	TST	(SP)+
+13$:	CALL	OUTEXT
+	BCS	13$
+
+	TST	RDATA+2
+	BEQ	8$
+	JSR	R5, INIRLD
+	.RAD50	/.rdata/
+
+	CLR	NXLDAD
+14$:	MOV	#RDATA+2, R0
+	CALL	OUTSEC
+	BCS	14$
+
+8$:	OU.BLK	BT.END
+	OU.FIN
+
+	MOV	OBJSTM, R1
+	.fclose
+;!!!R	RETURN
+
+
+	MOV	#LINK, R1
+	MOV	#OBJFN1, R2
+	.strcat
+	MOVB	#C.COMM, (R2)
+;!!!R	MOV	(R4)+, R2
+;!!!R	BNE	PROCES
+	MOV	#$CLLEN, R1
+	CLR	(R1)+		; $CLLEN = 0, possibly corrupted by Stack
+	TST	(PC)+
+COONL:	.WORD	0		;SELF-MOD	 -c Compile only
+	BNE	9$
+	MOV	#LINK, R2	; R1: #CLBUF here
+	.strcpy
+	MOV	#CLIB, R2
+	.strcat
+;	.SUBRC	puts
+	.strlen
+	INC	R0		; Count '\0'
+	MOV	R0, -(R1)	; $CLLEN = strlen($CLBUF)
+;	.CHAIN
+	BIS	#CHNIF$, $JSW
+	CLR	R0
+	.EXIT
+9$:	CLR	R1
+	JMP	exit
+
+;.PSECT	.data
+
+
+
+
+OUTSPC:	.BLKW	39.
+DEXT:	.WORD	-1
+	.RAD50	/OBJ/
+
+
+ESYM:	.WORD	ASYM
+
+ASYM:	.WORD	0
+LSYM:
+
+RMODE::	.ASCIZ	"r"
+WMODE:	.ASCIZ	"w"
+OBJEXT:	.ASCIZ	".OBJ"
+SAVEXT:	.ASCIZ	".SAV"
+CLIB:	.ASCIZ	",CRT0,C.LIB"
+ONE:	.ASCIZ	"1"
+
+
+OBJFN1:	.BYTE	C.SP
+OBJFN:	.BLKB	15
+
+;; Link command line
+LINK:	.ASCIZ	"LINK/EXE:"
+LINKE:	.BLKB	56.
+
+.EVEN
+
+
+
+.END

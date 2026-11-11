@@ -1,0 +1,105 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+;;;
+
+.TITLE	STRTOL
+
+.INCLUDE /macros.inc/
+
+.GLOBL	LABS1
+
+.PSECT	.text
+
+;; Skip whitespace
+;; Parse sign
+;; Invoke with `JSR R4, $STRTO`
+;; INPUT:
+;;  R1: sptr
+;; OUTPUT:
+;;   R0: 0
+;;   R1: next char
+;;   R5: sptr+1 or sptr+2
+$STRTO::
+	MOV	R1, R5
+1$:	MOVB	(R5)+, R1
+	.isspace
+	BNE	1$		; Skip spaces
+	CLR	(SP)		; sign
+	switch
+	case	'-	, 2$
+	case	'+	, 3$
+	default
+	BR	4$
+2$:	DEC	(SP)		; set sign
+3$:	MOVB	(R5)+, R1
+4$:	JMP	(R4)
+
+
+;; int atoi(const char* str)
+atoi::
+;; long atol(const char* str)
+atol::
+	CLR	R2
+	MOV	#10., R3
+			; Fallthrough
+; long strtol(const char* str, char** str_end, int base)
+strtol::
+	JSR	R4, $STRTO
+	PUSH	R2		; (SP): str_end
+
+	MOV	R3, R4
+	BNE	1$
+;; Detect base
+	MOV	#8., R4
+	CMPB	R1, #'0
+	BNE	3$
+	MOVB	(R5), R1
+	BEQ	3$
+	BIS	#40, R1		; To Lowercase
+	switch
+	case	'b	, 2$
+	case	'x	, 16$
+	default
+	BR	1$		; R4: 8. here
+
+2$:	MOV	#1, R4		; To get 2 in R3
+16$:	ASL	R4		; R4: 16.
+	INC	R5
+	BR	4$
+3$:	TST	(R4)+		; R4: 10.
+1$:	DEC	R5
+4$:	MUL	R0, R2		; R2:R3	= 0  result
+
+5$:	MOVB	(R5)+, R1
+	.SUBRC	isalnum
+	BEQ	9$
+	BIS	#40, R1		; To Lowercase
+	SUB	#'a-10., R1
+	BGT	6$
+	ADD	#'a-'0-10., R1
+6$:	CMP	R1, R4
+	BHIS	9$
+	PUSH	R4
+	MOV	R3, R0
+	ADD	R1, R3
+	MOV	R2, R1		; R1:R0  temp adder. CF not modified
+	BR	8$
+7$:	ADD	R1, R2
+	ADD	R0, R3
+8$:	ADC	R2
+	SOB	R4, 7$
+	POP	R4		; R4: restored base
+	BR	5$
+
+9$:	MOV	R3, R0
+	MOV	R2, R1		; R1:R0  result
+	POP	R4		; R4: str_end
+	BEQ	10$
+	DEC	R5
+	MOV	R5, (R4)
+10$:	TST	(SP)+		; sign
+	JMP	LABS1		; Negate long R1:R0 if sign<0; RETURN
+
+
+.END
