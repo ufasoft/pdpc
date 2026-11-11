@@ -47,9 +47,10 @@ It generates <a href="https://en.wikipedia.org/wiki/Threaded_code">threaded code
 <p> The priority was the compiler binary size. So it doesn't have any optimizer.
 
 <p>
-Source code: <a href="https://github.com/ufasoft/pdpc">github.com/ufasoft/pdpc</a>.<br>
 Project's site: <a href="https://ufasoft.com/pdpc">ufasoft.com/pdpc</a>.<br>
-Floppy disk image for УКНЦ: <a href="https://ufasoft.com/files/uknc/cc.dsk">cc.dsk</a>
+Source code: <a href="https://github.com/ufasoft/pdpc">github.com/ufasoft/pdpc</a>.<br>
+Developer's kit for RT-11: <a href="https://ufasoft.com/files/pdpc/pdpc.7z">pdpc.7z</a><br>
+Floppy disk image for УКНЦ: <a href="https://ufasoft.com/files/pdpc/ccuknc.dsk">ccuknc.dsk</a><br>
 
 <p>
 <author>Author: Sergey Pavlov <a href="mailto:dev@ufasoft.com">dev@ufasoft.com</a></author>
@@ -96,6 +97,36 @@ In the called function the address of the first argument would be <i>SP+2</i>.<b
 The function result is in <i>R0</i> or for 32-bit results in <i>R1:R0</i> (<i>R1</i> contains higher 16 bits).
 <p>Most of standard functions from <i>C.LIB</i> library don't use arguments from the Stack and can be invoked with arguments in registers only.<br/>
 Exceptions: variable-parameter functions, like <i>printf()</i>.
+
+<h3>.SUBRC helper</h3>
+<p>An invocation helper is available that automates some of these operations.
+<p>For example to call <code>printf(format, n);</code> you can write:
+<pre>
+MOV     #format, R1
+MOV     n, R2
+MOV     R2, -(SP)
+MOV     R1, -(SP)
+CLR     R0
+CALL    printf			; Corrupts registers R1..R5
+ADD     #4, SP
+</pre>
+Or, in a shorter form:
+<pre>
+MOV     #format, R1
+MOV     n, R2
+TRAP    104   			; Registers R1..R5 are restored to their pre-call state
+.WORD	printf
+</pre>
+<p>The helper pushes registers R5 through R1 onto the stack, clears R0, invokes the function, and then restores R1..R5 from the stack.<br>
+<strong>Note</strong>: If a function returns a long result in the R1 register pair, the high WORD (in R1) will be lost.
+<p>For convenience, use the following macro:
+<pre>
+.MACRO .SUBRC	fun
+    TRAP    ^o104
+    .WORD   fun
+.ENDM  .SUBRC
+</pre>
+
 
 <h2>Differences from the ANSI C Standard</h2>
 <ul>
