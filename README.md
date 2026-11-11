@@ -14,7 +14,7 @@ The priority was the compiler binary size. So it doesn't have any optimizer.
 
 Project's site: https://ufasoft.com/pdpc
 
-Floppy disk image for УКНЦ: `cc.dsk`
+Floppy disk image for УКНЦ: [cc.dsk](https://ufasoft.com/files/uknc/cc.dsk)
 
 **Author:** Sergey Pavlov (dev@ufasoft.com)
 
