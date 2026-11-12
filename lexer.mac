@@ -100,7 +100,7 @@ PANU7:	switch
 	case	'U	, PANU8
 	case	'u	, PANU8
 	default
-	.isxdigit
+	.SUBRC	isxdigit
 	BNE	PANU1
 	.UNGET
 PANU8:	CLRB	(R3)+
@@ -231,7 +231,7 @@ RSYM:	MOVB	R1, (R3)+
 	BLO	1$			;!!!O
 	DEC	R3
 1$:	R.CHR
-	.SUBRC	isalnum
+	.isalnum
 	BNE	RSYM
 	CMPB	R1, #'_
 	BEQ	RSYM
@@ -274,7 +274,7 @@ PASTR:	PUSH	R1		; PUSH #T.LSTR
 
 
 
-.RDATA
+.RADAT
 .EVEN
 
 ;; 1-char tokens
@@ -299,6 +299,8 @@ TOKS2:	.WORD	T.LSH-T2OFF	, T.RSH-T2OFF	, T.INCR-T2OFF	, T.DECR-T2OFF	, T.LAND-T2
 	.WORD	T.MULA-T2OFF	, T.DIVA -T2OFF	, T.REMA-T2OFF	, T.ANDA-T2OFF	, T.ORA-T2OFF	, T.XORA-T2OFF	, T.EQ-T2OFF	, T.NE-T2OFF
 	.WORD	T.LTEQ-T2OFF	, T.GTEQ-T2OFF	, T.ARRO-T2OFF
 
+.RDATA
+
 ESCTAB:	.BYTE	'a, C.BEL
 	.BYTE	'b, C.BS
 	.BYTE	'n, C.NL
@@ -313,14 +315,6 @@ ESCTAB:	.BYTE	'a, C.BEL
 TOKCH1:	.ASCII	"~.,:;()[]{}"		; Token with value equal to ASCII code
 TOKCH2:	.ASCIZ	"!%&*+-/<=>?^|"
 ;--
-
-
-;.PSECT	.data
-
-;.EVEN
-
-;!!!R IS.ARG::.WORD	0		; 1: parsing		;!!!?
-
 
 
 

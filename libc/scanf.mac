@@ -176,7 +176,7 @@ RNUSTR:	PUSH	R5
 	case	'+, 3$
 	case	'., 3$
 	default
-	.SUBRC	isalnum
+	.isalnum
 	BEQ	UNG
 3$:	MOVB	R1, (R5)+
 	BR	1$

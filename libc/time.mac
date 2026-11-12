@@ -397,8 +397,6 @@ FEBRUA:	.BYTE	28.
 
 .PSECT	.bss
 
-.EVEN
-
 ;; Static struct tm instance
 TM.SEC:	.WORD	0
 TM.MIN:	.WORD	0

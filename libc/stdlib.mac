@@ -8,7 +8,7 @@
 
 .INCLUDE /macros.inc/
 
-.GLOBL	STMS
+.GLOBL	STMS, RNOMEM
 
 
 .PSECT	.text
@@ -37,7 +37,7 @@ exit::
 	BR	EXIT9
 
 
-.OOM::	MOV	#ENOMEM, errno
+.OOM::	CALL	RNOMEM		; MOV	#ENOMEM, errno; CLR R0
 	CLR	R1
 	CALL	perror
 .ABORT::
@@ -45,7 +45,7 @@ exit::
 EXIT9:
 ;; Pass empty list of commands to KMON
 	CLR	$CLBUF
-	MOV	#1, $CLLEN
+;	MOV	#1, $CLLEN
 	MOV	#CHNIF$, $JSW
 ;	CLR	$JSW
 	CLR	R0
@@ -59,7 +59,7 @@ CHRBND:	TST	(SP)+
 	BHI	TST.R0
 	CMPB	R1, (R5)
 LO.FAL:	BLO	TST.R0
-INCR0:	INC	R0
+	INC	R0
 TST.R0:	TST	R0
 RET.D:	RETURN
 
@@ -94,33 +94,33 @@ isalpha::
 isupper::
 	CHR.BN	'A, 'Z
 
-
-;; int isxdigit(int)
-isxdigit::
-	CALL	isalnum
-	BEQ	RET.D
-	CMPB	#'F, R1		; R1 is digit or uppercase letter here
-	BR	LO.FAL
-
+;; int toupper(int c)
+toupper::
+	PUSH	#TOUPP1
+			; Fallthrough
 ;; int islower(int ch)
 islower::
 	CHR.BN	'a, 'z
 
 
+;; int isxdigit(int)
+isxdigit::
+	CALL	isalnum
+	BEQ	RET.D
+	CLR	R0
+	CMPB	#'F, R1		; R1 is digit or uppercase letter here
+	BR	LO.FAL
 
-;; int toupper(int c)
-toupper::
-	CALL	islower
+
+
+;; int tolower(int c)
+tolower::
+	CALL	isupper
 TOUPP1:	BEQ	R.R1
 	MOV	#40, R0
 	XOR	R0, R1
 R.R1:	MOV	R1, R0
 	RETURN
-
-;; int tolower(int c)
-tolower::
-	CALL	isupper
-	BR	TOUPP1
 
 
 ;; int abs(int j)
@@ -231,18 +231,16 @@ R50ASC:
 1$:	MOVB	R0, (R4)+
 	RTS	R5
 
+.RDATA
 
-;	.PSECT	.bss
+R50TAB:	.ASCII	"$.%0123456789"
 
-errno::	.WORD	0
+
+.PSECT .bss
 
 ;; Handlers set by atexit()
 EXITH:	.WORD	0, 0
 
-
-.RDATA
-
-R50TAB:	.ASCII	"$.%0123456789"
 
 
 

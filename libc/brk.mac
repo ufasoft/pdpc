@@ -7,6 +7,8 @@
 
 .INCLUDE /macros.inc/
 
+.GLOBL
+
 .PSECT	.text
 
 ;;int brk(void *addr)
@@ -17,8 +19,8 @@ brk::
 	SUB	R1, R0
 	BEQ	RET.A
 RESBRK:	.SETTOP	R2		; Restore previous break value
-	MOV	#-1, R0
-	MOV	#ENOMEM, errno
+	CALL	RNOMEM		; MOV	#ENOMEM, errno; CLR R0
+	DEC	R0		; R0: -1
 RET.A:	RETURN
 
 

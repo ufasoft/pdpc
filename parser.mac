@@ -524,12 +524,6 @@ IS.PP::	.WORD	0			; Preprocessor Mode ON (limited expressions)
 	IF.CHR	'(, DEFARG
 	PP.SYM
 	BR	EMSYM1
-			; Fallthrough
-;; Read symbol without expansion
-;!!!R RRAWSY:	INCB	NO.EXP
-;!!!R 	G.SYM
-;!!!R 	CLRB	NO.EXP
-	;!!!R RETURN
 
 
 
@@ -559,7 +553,6 @@ BLNOT1:	PUSH	R1
 2$:	CALL	EMIOF5
 UNAEND:	POP	R1		; the same type
 	BR	EUNA.C
-
 
 
 
@@ -1072,8 +1065,6 @@ STATIC:	INCB	IS.STA
 
 NOTTAB:	.BYTE	BNOT$L, BNOT$I, LNOT$L, LNOT$I
 NEGTAB:	.BYTE	NEG$L, NEG$I
-
-
 
 
 

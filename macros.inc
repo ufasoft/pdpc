@@ -49,13 +49,21 @@ EMFILE	=: 24.
 ;; Scratch buffer for temporary values
 $SCRAT	=: ^o310
 ASTKLO	=: ^o400
+ASTART	=: ^o2000		; Startup code, discarded after Runtime initialization
 ASTACK	=: ^o3000
+
 
 $DEVBL	= $SCRAT
 
+;; BYTE-aligned Read only data
 .MACRO	.RDATA
 	.PSECT	.rdata, D, RO
 .ENDM	.RDATA
+
+;; WORD-aligned Read only data
+.MACRO	.RADAT
+	.PSECT	.radat, D, RO
+.ENDM	.RADAT
 
 .MACRO	.CALLOC	sz
 	.IF NB sz
@@ -232,9 +240,9 @@ $DEVBL	= $SCRAT
 	TRAP	^o326
 .ENDM	.fseek
 
-.MACRO	.isxdigit
+.MACRO	.isalnum
 	TRAP	^o330
-.ENDM	.isxdigit
+.ENDM	.isalnum
 
 
 
@@ -251,8 +259,7 @@ RT = %5
 F.EOF	= 200
 F.ERR	= 100
 
-F.UNG1	= 40	; order doest matter in fgetc() and ungetc()
-F.UNG2	= 20
+F.UNG1	= 40	; order does matter in fgetc() and ungetc()
 
 F.TMP	= 4
 F.DIRT	= 10

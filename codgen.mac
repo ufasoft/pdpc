@@ -434,7 +434,7 @@ PSYM:	IF.CH	':, LABEL
 PEXPR:	.PEXPR
 	C.RVAL
 	EM.POP
-ESMT.A:	BR	ESMT.B
+ESMT.A:	BR	ESTMT
 
 LABEL:	.SYMB
 	CALL	NEWLAB
@@ -566,17 +566,13 @@ DECLAR:	MOV	R1, R3
 	POP	R3
 	IF.TOK	T.COMM, 1$
 ;; End of declarations
-ESMT.B:
-;; Parse Assignment statement
-;;!!!R PASGMT::
-;;!!!R 	CALL	PBINAR
 ESTMT::	CK.TOK	T.SEMI		; Check for ';'
 	RETURN
 
 
 ;; Local typedef
 LTYPED:	CALL	TYPEDEF
-	BR	ESMT.B
+	BR	ESTMT
 
 
 
@@ -643,7 +639,7 @@ TH.UBR::.BYTE	EQ$, NE$, LO$, LOS$, HI$, HIS$
 
 
 
-.PSECT	.bss2
+.PSECT	.bss
 
 ABSS::
 

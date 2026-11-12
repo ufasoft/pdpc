@@ -4,7 +4,7 @@
 ;;;
 
 .TITLE	CC - C compiler for PDP-11 (RT-11 OS)
-.IDENT	/2026.0/
+.IDENT	/2026.1/
 
 C$CC	= 1
 
@@ -20,8 +20,8 @@ C$CC	= 1
 
 .ASECT
 
-;. = $JSW
-;	.WORD	CHNIF$
+. = $JSW
+	.WORD	CHNIF$
 
 . = 1000
 
@@ -37,7 +37,7 @@ ERR.B:	.ERR
 . = 1000
 
 
-HELP:	.ASCII	"PDP C Compiler 2026.0 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
+HELP:	.ASCII	"PDP C Compiler 2026.1 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
         .ASCII	"Usage: CC [options] file.c"<C.NL>
         .ASCII	"OPTIONS:"<C.NL>
         .ASCII	" -c"<C.HT><C.HT>"Compile, but don't link"<C.NL>
@@ -53,6 +53,23 @@ PHELP:	MOV	#HELP, R1
 	CALL	puts
 	JMP	EXIT
 
+;; Change filename ext
+;; R1: filename, R3: new ext including dot
+CHEXT:	MOV	#'., R2
+	.SUBRC	strrchr
+	BEQ	RET.C
+	CLRB	(R0)
+	MOV	R3, R2
+	JMP	strcat
+RET.C:	RETURN
+
+
+;!!!R :	MOV	CURFN, R1
+ERR.R1:
+ERREXI::CALL	perror
+	MOV	errno, R1
+	JMP	exit
+	; Unreachable
 
 MAIN::	MOV	10, P.INVO
 	MOV	#I.INVO, 10
@@ -61,15 +78,58 @@ MAIN::	MOV	10, P.INVO
 
 	MOV	R2, R4		; R4: argv
 	TST	(R4)+		; R4: &argv[1]
-4$:	MOV	(R4)+, R2
+PAARGV:	MOV	(R4)+, R2
 	BEQ	PHELP
 	MOVB	(R2), R1
 	switch
-	case	'/, 1$
-	case	'-, 1$
+	case	'/, OPTION
+	case	'-, OPTION
 	default
-	JMP	PROCES
-1$:	MOVB	1(R2), R1
+	MOV	R2, CURFN	; Source filename
+	MOV	#OBJFN, R1
+	.strcpy
+	TSTB	LINKE-1		; char after LINK:/EXE
+	BNE	12$
+	MOV	OUTFN, R2
+	BNE	11$
+	MOV	#SAVEXT, R3
+	.SUBRC	CHEXT
+	MOV	R1, R2
+11$:	PUSH	R1
+	MOV	#LINK, R1
+	.strcat
+	POP	R1
+12$:	MOV	#OBJEXT, R3
+	.SUBRC	CHEXT
+	PUSH.W	TYPES, 0	; first WORD for `void`
+	MOV	(PC)+, R1
+CURFN:	.WORD	0		;SELF-MOD
+	CALL	OPNINP
+	BEQ	ERREXI
+	TST	(PC)+
+PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
+	BEQ	3$
+	JMP	PREPRO
+3$:	MOV	#OBJFN, R1
+	MOV	#WMODE, R2
+	.fopen
+	BEQ	ERR.R1
+	MOV	R0, OBJSTM
+
+	MOV	$DEVBL+2, R1	; Module name
+	MOV	$DEVBL+4, R2
+	CLR	R3
+	CALL	DGSD
+
+	.GSD	<. ABS.>, 5, 104, 0
+	.GSD	<.text >, 5, 40, 0	; Relocatable I-section
+
+;!!!R	PUSH.W	TEXT		; Reserve for .START reference
+;!!!R	.GSD	<.start>, 4, 100, 0	; Global Symbol `_start` to link CRT0.OBJ
+
+	JMP	COMPIL
+
+OPTION:	MOVB	1(R2), R1
 	switch
 	case	'D	, 5$
 	case	'E	, 7$
@@ -88,32 +148,19 @@ MAIN::	MOV	10, P.INVO
 2$:	MOV	R2, R1
 	MOV	#ONE, R2
 	.SUBRC	PPDEF
-	MOV	R0, EDEFS
-	BR	4$
+	BR	PAARGV
 
 7$:	INCB	PPONL
 8$:	INCB	COONL
-	BR	4$
-3$:	MOV	(R4)+, OUTFN
-	BR	4$
+	BR	PAARGV
+3$:	MOV	(R4)+, (PC)+
+OUTFN:	.WORD	0       ;SELF-MOD	OUTFN Output (.SAV) filename
+	BR	PAARGV
 
-.IIF	GT . - 001500	.ERROR CC init code outs of bound
-
+.IIF	GT . - ASTART	.ERROR CC init code out of bounds
 
 
 .PSECT	.text
-
-;; Write Vector to .OBJ section
-OUVEC:	MOV	(R5)+, R0
-	MOV	(R0)+, R4
-	MOV	(R0), R0
-	INC	R0
-	ASR	R0
-	BEQ	2$		;!!!O?
-1$:	MOV	(R4)+, R3
-	OU.W
-	SOB	R0, 1$
-2$:	RTS	R5
 
 
 
@@ -142,25 +189,9 @@ LDAD:	.WORD	0		; Address of the current 128.-byte .OBJ TXTsection
 	SUB	(R0), R4	; SUB vec, R4
 	MOV	R4, NXLDAD
 	SEC
-9$:
-RET.C:	RETURN
+9$:	RETURN
 
-;; Change filename ext
-;; R1: filename, R3: new ext including dot
-CHEXT:	MOV	#'., R2
-	.SUBRC	strrchr
-	BEQ	RET.C
-	CLRB	(R0)
-	MOV	R3, R2
-	JMP	strcat
 
-ERR:	MOV	CURFN, R1
-ERR.R1:
-;!!!R ERR:	CLR	R1
-ERREXI::CALL	perror
-	MOV	errno, R1
-	JMP	exit
-	; Unreachable
 
 
 
@@ -182,69 +213,15 @@ RET.B:	RETURN
 
 
 
-;; R2: Source filename
-PROCES:	MOV	R2, CURFN
-	MOV	(PC)+, R1
-EDEFS:	.WORD	0		;SELF-MOD End of command-line definitions
-	BEQ	1$
-	INC	R1
-	BIC	#1, R1
-	MOV	R1, $AHEAP	; Prevent cleaning -D definitions
-1$:
-;!!!R 	MOV	PPCUR, (PC)+
-;!!!R PPSAV:	.WORD	0		;SELF-MOD	 List of Preproceccor definitions before each compilation
-	MOV	#OBJFN, R1
-	.strcpy
-	TSTB	LINKE-1		; char after LINK:/EXE
-	BNE	PROCE1
-	MOV	(PC)+, R2
-OUTFN:	.WORD	0		;SELF-MOD	Output (.SAV) filename
-	BNE	1$
-	MOV	#SAVEXT, R3
-	.SUBRC	CHEXT
-	MOV	R1, R2
-1$:	PUSH	R1
-	MOV	#LINK, R1
-	.strcat
-	POP	R1
-PROCE1:	MOV	#OBJEXT, R3
-	.SUBRC	CHEXT
-
-COMPIL:
-	PUSH.W	TYPES, 0	; first WORD for `void`
-	MOV	(PC)+, R1
-CURFN:	.WORD	0		;SELF-MOD
-	CALL	OPNINP
-	BEQ	ERREXI
-	TST	(PC)+
-PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
-	BNE	PREPRO
-	MOV	#OBJFN, R1
-	MOV	#WMODE, R2
-	.fopen
-	BEQ	ERR.R1
-	MOV	R0, OBJSTM
-
-	MOV	$DEVBL+2, R1	; Module name
-	MOV	$DEVBL+4, R2
-	CLR	R3
-	CALL	DGSD
-
-	.GSD	<. ABS.>, 5, 104, 0
-	.GSD	<.text >, 5, 40, 0	; Relocatable I-section
-
-;!!!R	PUSH.W	TEXT		; Reserve for .START reference
-;!!!R	.GSD	<.start>, 4, 100, 0	; Global Symbol `_start` to link CRT0.OBJ
-
-	CALL	PDECLS
-
+COMPIL:	CALL	PDECLS
 
 ;!!!T	.GSD	<.rdata>, 5, 40, 0	; Relocatable I-section
 	.GSD	<.rdata>, 5, 260, 0	; Relocatable read-only D-section
 
-	MOV	GSD, R3
-	MOV	TEXT+2, 26(R3)		; Write `Maximum length` field of .text P-Sect entry in GSD
-	ADD	GSD+2, R3
+	MOV	GSD, R4
+	MOV	TEXT+2, 26(R4)		; Write `Maximum length` field of .text P-Sect entry in GSD
+	MOV	GSD+2, R3
+	ADD	R4, R3
 	MOV	RDATA+2, -(R3)		; Write `Maximum length` field of .rdata P-Sect entry in GSD
 
 
@@ -252,8 +229,14 @@ PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 	.GSD	<. ABS.>, 3, 10, 1	; Transfer Address
 
 	OU.BLK	BT.GSD
-	JSR	R5, OUVEC
-	.WORD	GSD
+;; Write GSD to .OBJ section
+	MOV	GSD+2, R0		; R0 > 0
+21$:	MOVB	(R4)+, R3
+	OU.B
+	SOB	R0, 21$
+22$:
+
+
 
 	OU.BLK	BT.EGS
 
@@ -322,20 +305,16 @@ PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 
 	MOV	OBJSTM, R1
 	.fclose
-;!!!R	RETURN
 
 
 	MOV	#LINK, R1
 	MOV	#OBJFN1, R2
 	.strcat
 	MOVB	#C.COMM, (R2)
-;!!!R	MOV	(R4)+, R2
-;!!!R	BNE	PROCES
-	MOV	#$CLLEN, R1
-	CLR	(R1)+		; $CLLEN = 0, possibly corrupted by Stack
 	TST	(PC)+
 COONL:	.WORD	0		;SELF-MOD	 -c Compile only
 	BNE	9$
+	MOV	#$CLBUF, R1
 	MOV	#LINK, R2	; R1: #CLBUF here
 	.strcpy
 	MOV	#CLIB, R2
@@ -344,27 +323,14 @@ COONL:	.WORD	0		;SELF-MOD	 -c Compile only
 	.strlen
 	INC	R0		; Count '\0'
 	MOV	R0, -(R1)	; $CLLEN = strlen($CLBUF)
-;	.CHAIN
-	BIS	#CHNIF$, $JSW
+;	BIS	#CHNIF$, $JSW
 	CLR	R0
 	.EXIT
 9$:	CLR	R1
 	JMP	exit
 
-;.PSECT	.data
 
-
-
-
-OUTSPC:	.BLKW	39.
-DEXT:	.WORD	-1
-	.RAD50	/OBJ/
-
-
-ESYM:	.WORD	ASYM
-
-ASYM:	.WORD	0
-LSYM:
+.RDATA
 
 RMODE::	.ASCIZ	"r"
 WMODE:	.ASCIZ	"w"
@@ -373,16 +339,15 @@ SAVEXT:	.ASCIZ	".SAV"
 CLIB:	.ASCIZ	",CRT0,C.LIB"
 ONE:	.ASCIZ	"1"
 
+.PSECT	.data
+
 
 OBJFN1:	.BYTE	C.SP
 OBJFN:	.BLKB	15
 
 ;; Link command line
 LINK:	.ASCIZ	"LINK/EXE:"
-LINKE:	.BLKB	56.
-
-.EVEN
-
+LINKE:	.BLKB	30.		;!!!O
 
 
 .END

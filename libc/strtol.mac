@@ -72,7 +72,7 @@ strtol::
 4$:	MUL	R0, R2		; R2:R3	= 0  result
 
 5$:	MOVB	(R5)+, R1
-	.SUBRC	isalnum
+	.isalnum
 	BEQ	9$
 	BIS	#40, R1		; To Lowercase
 	SUB	#'a-10., R1

@@ -189,8 +189,8 @@ CLRR0:	CLR	R0
 	RTI
 
 TRP300:	MOV	SUBRS-<OP.TRAP+300>(R0), SUBRA+2
-	CALL	CLRR0
-	BR	SUBRG
+	PUSH	#SUBRG
+	BR	CLRR0
 
 .IF NE C$CC
 
@@ -256,7 +256,6 @@ ADR2R4:	ADD	R2, R4
 .IF NE C$CC
 
 
-
 TOK.IF:	MOV	R1, R0
 	R.TOK
 	BEQ	SKI4
@@ -278,12 +277,10 @@ CHIF1:	JSR	R3, RDCASE
 EXT.PO: MOV	#EXTYPE, R5
 	BR	W.POP1
 
-
 .ENDC	; C$CC
 
 
 W.POP:	MOV	(R4)+, R5
-;!!!R	MOV	R4, PC.OFF(SP)		; POP.W must set flags based on R1
 W.POP1:	MOV	(R5)+, R1
 	MOV	(R5), R3
 	SUB	#2, R3
@@ -845,7 +842,6 @@ RE.H:	BR	RE.G
 
 PLC.EM:	MOV	(R4)+, R1
 	.EMIT
-;!!!R	MOV	R4, PC.OFF(SP)
 	BR	RETOFF
 
 BNE.EM:	.EMI	$BNE
@@ -972,8 +968,6 @@ RE4.J:	BR	RE4.H
 
 
 
-
-
 I.CAST:	MOV	#TY.I, R1
 CAST.:	TST	(R0)+		; R0: 2
 	MOV	R1, R2		; R2: Target Expression Type
@@ -1017,9 +1011,6 @@ BCCERH:	BCC	ERR.H
 ECASTA:	BR	ECAST
 
 
-
-;;!!!R ASGMT.: PUSH	TSTKB
-;;!!!R 	CALL	PASGMT
 
 EXPR.2::POP	TSTKB
 	BR	RE.I
@@ -1283,9 +1274,7 @@ A2R50A:	CLR	R5
 
 .ENDC	; C$CC
 
-; .RDATA
-
-
+;.RADAT		; must be in the same section as code
 
 TRAPS:	.WORD	W.REMO	, W.PUSH	, REALO.	, W.POP		, SUBRC.	, CALLS.				; 100
 .IF NE C$CC
@@ -1313,18 +1302,24 @@ MODTOK:	.WORD	0		; Pointer in the current Token
 SUBRS:	.WORD	strlen		, strcmp	, strcpy	, isspace								; 300
 	.WORD	callo$		, free		, fputc		, isdigit								; 310
 	.WORD	fputs		, fgetc		, fclose	, fseek									; 320
-	.WORD	isxdigit														; 330
+	.WORD	isalnum															; 330
 .IF NE C$CC
 	.WORD			strcat		, GINI		, LINI									; 330
 	.WORD	PUNARY		, fopen													; 340
+
+.RDATA
 
 TYSZ:	.BYTE	2, 2, 2, 1, 2, 4, 4	; sizeof(sym, , unk, char, int, long, float)
 .IIF NE C$DBL	.BYTE 8.
 
 
+.RDATA
+
 MSGAT:	.ASCIZ	"Error C%d at %s:%d"<C.NL>
 
 .ENDC
+
+.RDATA
 
 ERRSTR:	.ASCIZ	"Error C"
 STKOVF:	.ASCIZ	"Stack overflow"

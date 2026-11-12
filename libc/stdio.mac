@@ -18,7 +18,7 @@ struct _FILE {
 	uint8_t	cha;
 	long	pos;
 	long	len;		;!!!? may be reverse order?
-	char	unget2, unget1;
+	char	reserv, unget1;
 	uint16_t	buf[];
 } FILE;
 
@@ -111,15 +111,9 @@ ungetc::
 	BMI	9$
 	MOV	#F.UNG1, R4
 	BIT	R4, (R2)
-	BNE	5$
-	MOVB	R1, 11.(R2)
-	BR	8$
-5$:	.ERR	31.		;!!!D To detect two ungetc() calls
-	ASR	R4		; R4: F.UNG2
-	BIT	R4, (R2)
 	BNE	R$EOF
-	MOVB	R1, 10.(R2)
-8$:	BIS	R4, (R2)+
+	MOVB	R1, 11.(R2)
+	BIS	R4, (R2)+
 	SUB	#1, (R2)+	; FILE.pos--
 	SBC	(R2)
 9$:
@@ -159,7 +153,7 @@ SYNC:	MOV	R1, R4
 	MOV	(R4)+, R5	; len
 	MOV	(R4)+, R0
 	TST	(R4)+		; R4: address of buffer
-	BIC	#F.UNG1!F.UNG2!F.EOF, -(R1)
+	BIC	#F.UNG1!F.EOF, -(R1)
 	BIT	#777, R3
 	BNE	2$
 	CMP	R3, R5
@@ -203,10 +197,7 @@ getchar::
 stdin::	.WORD	 STDSTM		;SELF-MOD
 			; Fallthrough
 fgetc::
-	MOV	#F.UNG2, R4
-	BITB	R4, (R1)
-	BNE	8$
-	ASL	R4		; R4: #F.UNG1
+	MOV	#F.UNG1, R4
 	BITB	R4, (R1)+
 	BNE	6$
 	TSTB	(R1)+		; channel
@@ -223,9 +214,7 @@ fgetc::
 	BR	5$
 6$:	DEC	R1
 	BISB	11.(R1), R0
-	BR	3$
-8$:	BISB	10.(R1), R0
-3$:	BIC	R4, (R1)+
+	BIC	R4, (R1)+
 5$:     ADD	#1, (R1)+	; FILE.pos++
 	ADC	(R1)
 9$:	RETURN
@@ -268,7 +257,8 @@ fflush::
 
 FOPENE:	MOVB	$ERRBY, R0
 	MOVB	LOOERR(R0), R3
-FOPEN8:	MOV	R3, errno
+FOPEN8:	MOV	R3, (PC)+
+errno::	.WORD	0
 	MOV	R4, R1		; Unwind. R1: FILE*
 	BR	FRE
 FOPENW:	CLR	R3
@@ -323,20 +313,19 @@ STMERR:	BISB	#F.ERR, (R4)
 	MOV	R3, errno
 	BR	$IOOK		; CLR R0; RETURN
 
-stderr::.WORD	 STDSTM
 
-
-S.NL:	.ASCIZ	<C.NL>
 
 
 .RDATA
+
+S.NL:	.ASCIZ	<C.NL>
+
 LOOERR:	.BYTE	EBADF, ENOENT, EBUSY, EEXIST, EFAULT, EINVAL, ENODEV
 
 
 .PSECT	.bss
 
-.EVEN
-STDSTM:	.WORD	0, 0, 0, 0	; FILE
+STDSTM::.WORD	0, 0, 0, 0	; FILE
 STMS::	.WORD	0, 0		; Open streams
 $AREA:	.BLKW	4
 DEFEXT:	.WORD	0, 0, 0, 0

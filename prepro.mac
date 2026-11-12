@@ -755,7 +755,7 @@ NEXTCH::MOV	MEMSTM, R4
 
 
 
-.RDATA
+.RADAT
 
 .EVEN
 
@@ -777,8 +777,9 @@ FILE:	.WORD	DATE
 LINE:	.WORD	FILE
 	.ASCIZ	"__LINE__"
 
-DQUOT:	.ASCIZ	/"/
+.RDATA
 
+DQUOT:	.ASCIZ	/"/
 
 FMTDAT:	.ASCIZ	/"%b %d %Y"/
 
@@ -789,8 +790,6 @@ SYDEV:	.ASCIZ	"SY:"
 
 
 .PSECT	.bss
-
-.EVEN
 
 FLSLV:	.WORD	0		; (Negative) Level of nesting inside false .IF branch
 

@@ -25,8 +25,7 @@
 
 
 .ASECT
-. = 1500
-
+. = ASTART
 
 ;; Copy command line part backward from R4, to R2 ignoring spaces
 COPCL:	MOVB	(R5)+, -(R2)
@@ -81,7 +80,7 @@ ISTK:
 5$:	POP	R2
 	BR	1$
 8$:
-;	CLR	$CLLEN
+	MOV	#1, $CLLEN
 
 CARGV0:
 	MOV	R1, R2		; pointer into future Stack
@@ -123,7 +122,7 @@ CARGV0:
 
 ARGV:	.WORD	ARGV+2
 	.BLKW	20.
-	.BLKB	400     	; Enough for Command Line
+	.BLKB	300     	; Enough for Command Line
 
 
 

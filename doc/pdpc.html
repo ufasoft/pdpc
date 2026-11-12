@@ -122,9 +122,18 @@ TRAP    104   			; Registers R1..R5 are restored to their pre-call state
 <p>For convenience, use the following macro:
 <pre>
 .MACRO .SUBRC	fun
-    TRAP    ^o104
-    .WORD   fun
+        TRAP    ^o104
+        .WORD   fun
 .ENDM  .SUBRC
+</pre>
+
+<h2>Separate compilation</h2>
+<p>If you have several <code>.c</code> modules, compile each one separately using the <code>-c</code> option.<br>
+Then link the resulting object files, adding the <code>crt0</code> module. It contains the <code>_start</code> symbols and the runtime initialization code.
+<pre>
+.cc -c foo.c
+.cc -c bar.c
+.LINK foo,bar,crt0,c.lib
 </pre>
 
 
