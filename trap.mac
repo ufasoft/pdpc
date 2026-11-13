@@ -42,7 +42,7 @@ I.INVO::PUSH	R1
 	CMPB	(R1), #7400/400
 	BEQ	EMI
 	POP	R1
-	JMP	@P.INVO
+	JMP	@$PINVO
 
 ;; .EMI
 EMI:	MOVB	-(R1), R1
@@ -156,7 +156,7 @@ I.TRAP::
 	BHIS	TRP100
 	CMP	R0, #OP.TRAP + 40
 	BHI	SWIT.
-TRPERR:	MOV	#ASTACK-200, SP		; Don't touch command line arguments
+TRPERR:	MOV	#$STACK-200, SP		; Don't touch command line arguments
 	MOV	#STKOVF, R5
 	MOV	#10., R3
 	MOVB	R0, R1			; .ERR processing

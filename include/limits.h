@@ -8,8 +8,8 @@
 #define INT_MIN -32768
 #define INT_MAX 32767
 #define UINT_MAX 65535
-#define LONG_MIN (-2147483647-1)
-#define LONG_MAX 2147483647
+#define LONG_MIN (-2147483647L-1)
+#define LONG_MAX 2147483647L
 #define ULONG_MAX 0xffffffffUL
 
 #endif

@@ -9,7 +9,7 @@
 
 ;; Fixed address to avoid massive Relocation of the Threaded code
 ;.ASECT
-;. = ASTACK
+;. = $STACK
 
 
 .MACRO	.OFF	off, sym

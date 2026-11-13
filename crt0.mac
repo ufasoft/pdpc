@@ -25,7 +25,7 @@
 
 
 .ASECT
-. = ASTART
+. = $START
 
 ;; Copy command line part backward from R4, to R2 ignoring spaces
 COPCL:	MOVB	(R5)+, -(R2)
@@ -56,7 +56,7 @@ PARCL::
 	MOV	(PC)+, R1
 ISTK:
 .IIF NE C$CC	.WORD	CC$STK
-.IIF EQ C$CC	.WORD	ASTACK
+.IIF EQ C$CC	.WORD	$STACK
 
 	CLR	-(R1)		; Reserve a word in Stack as space for changing filename extension of argv[1]
 	MOV	#$CLBUF, R2
@@ -129,7 +129,7 @@ ARGV:	.WORD	ARGV+2
 ;.PSECT	.crt0
 .ASECT
 
-. = ASTACK
+. = $STACK
 .INCLUDE	/thunk.mac/
 
 ;. = 7000

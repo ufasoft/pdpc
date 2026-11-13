@@ -46,11 +46,11 @@ EMFILE	=: 24.
 
 .GLOBL	$AREA
 
-P.INVO	=: ^o120			; Previos Vector 10
+$PINVO	=: ^o120		; Previous Vector 10
 $SCRAT	=: ^o310		; Scratch buffer for temporary values
-ASTKLO	=: ^o400
-ASTART	=: ^o2000		; Startup code, discarded after Runtime initialization
-ASTACK	=: ^o3000
+$STKLO	=: ^o400
+$START	=: ^o2000		; Startup code, discarded after Runtime initialization
+$STACK	=: ^o3000
 
 
 $DEVBL	= $SCRAT
@@ -182,7 +182,7 @@ $DEVBL	= $SCRAT
 .ENDM	.ERR
 
 .MACRO	.CKSTK
-	CMP	SP, #ASTKLO
+	CMP	SP, #$STKLO
 	BHIS	.+4
 	.E.SO
 .ENDM
@@ -256,13 +256,13 @@ RT = %5
 
 
 ;; _FILE.flags
-F.EOF	= 200
-F.ERR	= 100
+F.EOF	= ^o200
+F.ERR	= ^o100
 
-F.UNG1	= 40	; order does matter in fgetc() and ungetc()
+F.UNG1	= ^o40	; order does matter in fgetc() and ungetc()
 
 F.TMP	= 4
-F.DIRT	= 10
+F.DIRT	= ^o10
 
 
 .IIF NE C$DBG .INCLUDE /debug.inc/

@@ -37,7 +37,7 @@ ERR.B:	.ERR
 . = 1000
 
 
-HELP:	.ASCII	"PDP C Compiler 2026.1 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
+HELP:	.ASCII	"PDP C Compiler 2026.2 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
         .ASCII	"Usage: CC [options] file.c"<C.NL>
         .ASCII	"OPTIONS:"<C.NL>
         .ASCII	" -c"<C.HT><C.HT>"Compile, but don't link"<C.NL>
@@ -76,7 +76,7 @@ ERREXI::CALL	perror
 MAIN::	MOV	#10, R5
 	CMP	(R5), #I.INVO
 	BEQ	1$		; avoid double ISR chaining
-	MOV	(R5), P.INVO
+	MOV	(R5), $PINVO
 	MOV	#I.INVO, (R5)
 1$:
 	; DEC	R1
@@ -172,7 +172,7 @@ ONE:	.ASCIZ	"1"
 .EVEN
 
 
-.IIF	GT . - ASTART	.ERROR CC init code out of bounds
+.IIF	GT . - $START	.ERROR CC init code out of bounds
 
 
 .PSECT	.text
@@ -226,10 +226,9 @@ COMPIL:	CALL	PDECLS
 ;!!!T	.GSD	<.rdata>, 5, 40, 0	; Relocatable I-section
 	.GSD	<.rdata>, 5, 260, 0	; Relocatable read-only D-section
 
-	MOV	GSD, R4
-	MOV	TEXT+2, 26(R4)		; Write `Maximum length` field of .text P-Sect entry in GSD
-	MOV	GSD+2, R3
-	ADD	R4, R3
+	MOV	GSD, R3
+	MOV	TEXT+2, 26(R3)		; Write `Maximum length` field of .text P-Sect entry in GSD
+	ADD	GSD+2, R3
 	MOV	RDATA+2, -(R3)		; Write `Maximum length` field of .rdata P-Sect entry in GSD
 
 
@@ -238,6 +237,7 @@ COMPIL:	CALL	PDECLS
 
 	OU.BLK	BT.GSD
 ;; Write GSD to .OBJ section
+	MOV	GSD, R4
 	MOV	GSD+2, R0		; R0 > 0
 21$:	MOVB	(R4)+, R3
 	OU.B
@@ -344,7 +344,7 @@ FINISH:	CLR	R1
 		; Fallthrough
 ;; Restore 10 vector
 RESV10::
-	MOV	P.INVO, 10
+	MOV	$PINVO, 10
 	RETURN
 
 
