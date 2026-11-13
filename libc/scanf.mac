@@ -12,7 +12,7 @@
 .PSECT	.text
 
 ;; Get from stream callback
-STMCB:	MOV	(PC)+, R1
+STMGET:	MOV	(PC)+, R1
 CURSTM:	.WORD	0	;SELF-MOD
 	JMP	fgetc
 
@@ -37,8 +37,8 @@ sscanf::
 ;; int vsscanf(const char* buffer, const char* format, va_list)
 vsscanf::
 	MOV	R1, CURSTM
-	MOV	#STRGET, INPC+2
-	MOV	#STRUNG, UNGC+2
+	MOV	#STRGET, INPC
+	MOV	#STRUNG, UNGC
 	MOV	R2, R4
 	MOV	R3, R5
 	BR	$VSCANF
@@ -62,7 +62,8 @@ vscanf::
 			; Fallthrough
 ;; int vfscanf(FILE*, const char* format, va_list)
 vfscanf::
-	MOV	#STMCB, INPC+2
+	MOV	#STMGET, INPC
+	MOV	#STMUNG, UNGC
 ;; R4: format
 ;; R5: va_list
 $VSCANF:
@@ -115,9 +116,8 @@ SCASTR:	MOV	(R5)+, R2
 
 SKIPS1:	MOV	R0, R1
 	.isspace
-	BEQ	UNG
-
-SKIPSP:	CALL	@INPC
+	BEQ	UNGCHR
+SKIPSP:	CALL	INCH
 	BGT	SKIPS1
 ESCAN:	SUB	(SP)+, R5
 	ASR	R5
@@ -125,14 +125,15 @@ ESCAN:	SUB	(SP)+, R5
 	MOV	R5, R0		; received args
 	RETURN
 
-
+UNGCHR:	PUSH	#SCLOOP
 UNG:	DEC	CHRNUM
 	CALL	@(PC)+
 UNGC:	.WORD	0		; unget-char callback
-	BR	SCLOOP
+	RETURN
 
 
-SCACHR:	CALL	@INPC
+
+SCACHR:	CALL	INCH
 	BLE	ESCAN
 WRITV:	MOV	R0, @(R5)+
 	BR	SCLOOP
@@ -170,16 +171,16 @@ RNUSTR:	PUSH	R5
 	MOV	#$SCRAT, R5
 1$:	CALL	INCH
 	BLE	8$
-	MOV	R0, R1
 	switch
 	case	'-, 3$
 	case	'+, 3$
 	case	'., 3$
 	default
 	.isalnum
-	BEQ	UNG
+	BEQ	4$
 3$:	MOVB	R1, (R5)+
 	BR	1$
+4$:	CALL	UNG
 8$:	CLRB	(R5)
 	POP	R5
 	MOV	#$SCRAT, R1
