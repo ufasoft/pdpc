@@ -6,19 +6,18 @@
 
 .INCLUDE /macros.inc/
 
-.GLOBL	time
+.GLOBL	clock, CLOCKS
 
 
 .PSECT	.text
 
 ;; unsigned sleep(unsigned sec)
 sleep::
-	MOV	R1, R2		; R2: sec
-	CLR	R1
-	.SUBRC	time
-	ADD	R0, R2
-1$:	.SUBRC	time
-	CMP	R0, R2
+	MUL	CLOCKS, R1	; R1: sec * CLOCKS_PER_SEC
+	.SUBRC	clock
+	ADD	R0, R1		; R1: target clock_t value
+1$:	.SUBRC	clock
+	CMP	R0, R1
 	BLT	1$
 	CLR	R0
 	RETURN

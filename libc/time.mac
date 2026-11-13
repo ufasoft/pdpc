@@ -101,7 +101,7 @@ CLKMIN::.WORD	60. * 60.	; Hz per minute
 	MOV	R0, R3
 	CLR	R0
 	DIV	(PC)+, R0
-CLK::	.WORD	60.		; Hz
+CLOCKS::.WORD	60.	; CLOCKS_PER_SEC  Hz
 	DIV	#60., R2	; R2==0 here
 	PUSH	R2, R3, R0	; tm_hour, tm_min, tm_sec
 	MOV	SP, R1
