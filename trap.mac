@@ -488,23 +488,6 @@ SYM.PP:	INCB	NO.EXP
 
 
 
-CHRPP2:	R.TOK
-	BEQ	RE.C
-	TST	ASCII+2
-	BEQ	CHRPP2
-	MOV	ASCII, R1
-CHRPP1:	MOV	R1, (R2)
-CHR.PP:	MOV	SP, IS.OPE		; Allow T.SP tokens
-	MOV	#MODTOK, R2
-	MOV	(R2), R0
-	BEQ	CHRPP2
-;; Read pre-read token (from ASCII)
-;; R2: #MODTOK
-	MOVB	(R0)+, R1
-	BEQ	CHRPP1
-	MOV	R0, (R2)
-	BR	RE.C
-
 INS.LS:	MOV	@(R4), (R1)
 	MOV	R1, @(R4)+
 	BR	RE4.C
@@ -1283,7 +1266,7 @@ TRAPS:	.WORD	W.REMO	, W.PUSH	, REALO.	, W.POP		, SUBRC.	, CALLS.				; 100
 	.WORD                                                                                            ARR.IS		, TYPP2.	; 106
 	.WORD	CH.IF	, TYI.PU	, EMSYM.	, EXTYP.	, CAST.		, I.CAST	, VEC.RE	, VEC.SV	; 110
 	.WORD	CE.EV	, SYMB.G	, GSD.		, DCL.T		, FLD.T		, TRY2I.	, B.CAST	, P.EXTY	; 120
-	.WORD	CHR.R	, CHR.G		, UNGET.	, CHR.IF	, B.PUSH	, SYM.G		, WS.SK		, CHR.PP	; 130
+	.WORD	CHR.R	, CHR.G		, UNGET.	, CHR.IF	, B.PUSH	, SYM.G		, WS.SK		, D.PUSH	; 130
 	.WORD	WORD.F	, INS.LS	, DEL.LS	, R50.A		, FDWOR.	, CLEAR.	, POP.EM	, JMP.EM	; 140
 	.WORD	UP.EVN	, OFF.EM	, COF.EM	, PLC.EM	, CIE.EV	, BEXPR.	, PEXPR.	, ITER.		; 150
 	.WORD	TOK.G	, TOK.IF	, TYPED.	, TOK.UN	, TYPEP.	, FIND.		, FIND2.	, SYM.		; 160
@@ -1291,13 +1274,11 @@ TRAPS:	.WORD	W.REMO	, W.PUSH	, REALO.	, W.POP		, SUBRC.	, CALLS.				; 100
 	.WORD	EMIT.	, ALG.SZ	, EXPR.		, EXT.PO	, UNRV.P	, OF.LOC	, CAT.TY	, UNWTO.	; 200
 	.WORD	STMT.	, BZ.PU		, CALLO.	, UNGE2.	, LCHR.R	, NEXTC.	, TOK.R		, SHRIN.	; 210
 	.WORD	NEXTB.	, SYM.PP	, EMIR1.	, FI.LOC	, BEQ.EM	, BNE.EM	, EXT.PU	, W.PU2		; 220
-	.WORD	SYMB.	, B.OU		, FUN.IS	, PEXPP.	, B.PUSH	, S.PUSH	, D.PUSH	 	; 230
+	.WORD	SYMB.	, B.OU		, FUN.IS	, PEXPP.	, B.PUSH	, S.PUSH		 	; 230
 																	; 240
 .EVEN
 
-;.PSECT	.data
 
-MODTOK:	.WORD	0		; Pointer in the current Token
 
 .ENDC	; C$CC
 

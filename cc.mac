@@ -4,7 +4,7 @@
 ;;;
 
 .TITLE	CC - C compiler for PDP-11 (RT-11 OS)
-.IDENT	/2026.1/
+.IDENT	/2026.3/
 
 C$CC	= 1
 
@@ -16,7 +16,7 @@ C$CC	= 1
 
 
 .GLOBL	ERREXI, PPDEF, PPCUR, OPNINP, PDECLS, PPDEF, GSD, SYMBS, VARS, ABSS, EBSS, OBJSTM, TYPES
-.GLOBL	TEXT, RDATA, RELOCS, DGSD, I.INVO
+.GLOBL	TEXT, RDATA, RELOCS, DGSD, I.INVO, $EXIT
 
 .ASECT
 
@@ -37,7 +37,7 @@ ERR.B:	.ERR
 . = 1000
 
 
-HELP:	.ASCII	"PDP C Compiler 2026.2 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
+HELP:	.ASCII	"PDP C Compiler 2026.3 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
         .ASCII	"Usage: CC [options] file.c"<C.NL>
         .ASCII	"OPTIONS:"<C.NL>
         .ASCII	" -c"<C.HT><C.HT>"Compile, but don't link"<C.NL>
@@ -78,7 +78,8 @@ MAIN::	MOV	#10, R5
 	BEQ	1$		; avoid double ISR chaining
 	MOV	(R5), $PINVO
 	MOV	#I.INVO, (R5)
-1$:
+1$:	MOV	#RESV10, R1
+	CALL	atexit
 	; DEC	R1
 	; BEQ	PHELP		; argc == 1
 
@@ -94,7 +95,7 @@ PAARGV:	MOV	(R4)+, R2
 	MOV	R2, CURFN	; Source filename
 	MOV	#OBJFN, R1
 	.strcpy
-	TSTB	LINKE-1		; char after LINK:/EXE
+	TSTB	SLINKE-1		; char after LINK:/EXE
 	BNE	12$
 	MOV	OUTFN, R2
 	BNE	11$
@@ -102,7 +103,7 @@ PAARGV:	MOV	(R4)+, R2
 	.SUBRC	CHEXT
 	MOV	R1, R2
 11$:	PUSH	R1
-	MOV	#LINK, R1
+	MOV	#SLINK, R1
 	.strcat
 	POP	R1
 12$:	MOV	#OBJEXT, R3
@@ -114,9 +115,8 @@ CURFN:	.WORD	0		;SELF-MOD
 	BEQ	ERREXI
 	TST	(PC)+
 PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
-	BEQ	3$
-	JMP	PREPRO
-3$:	MOV	#OBJFN, R1
+	BNE	PREPRO
+	MOV	#OBJFN, R1
 	MOV	#WMODE, R2
 	.fopen
 	BEQ	ERR.R1
@@ -134,6 +134,27 @@ PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 ;!!!R	.GSD	<.start>, 4, 100, 0	; Global Symbol `_start` to link CRT0.OBJ
 
 	JMP	COMPIL
+
+
+
+;; -E option
+;; Preprocess only
+PREPR3:	MOVB	(R0)+, R1		; Read pre-read token (from ASCII)
+	BEQ	CHRPP1
+	MOV	R0, (R2)
+	CALL	putchar
+	BR	PREPRO
+CHRPP2:	TST	ASCII+2
+	BEQ	CHRPP2
+	MOV	ASCII, R1
+CHRPP1:	MOV	R1, (R2)
+PREPRO:	MOV	SP, IS.OPE		; Allow T.SP tokens
+	MOV	#MODTOK, R2
+	MOV	(R2), R0
+	BNE	PREPR3
+	R.TOK
+	BNE	CHRPP2
+	JMP	exit			; exit(0)
 
 OPTION:	MOVB	1(R2), R1
 	switch
@@ -157,17 +178,18 @@ OPTION:	MOVB	1(R2), R1
 	BR	PAARGV
 
 7$:	INCB	PPONL
-8$:	INCB	COONL
+8$:	CLR	LINK
 	BR	PAARGV
 3$:	MOV	(R4)+, (PC)+
 OUTFN:	.WORD	0       ;SELF-MOD	OUTFN Output (.SAV) filename
 	BR	PAARGV
 
+MODTOK:	.WORD	0		; Pointer in the current Token
+
 WMODE:	.ASCIZ	"w"
 OBJEXT:	.ASCIZ	".OBJ"
 SAVEXT:	.ASCIZ	".SAV"
 ONE:	.ASCIZ	"1"
-
 
 .EVEN
 
@@ -176,8 +198,6 @@ ONE:	.ASCIZ	"1"
 
 
 .PSECT	.text
-
-
 
 
 ;; Outputs up to 128. bytes of TEXT to .OBJ
@@ -243,8 +263,6 @@ COMPIL:	CALL	PDECLS
 	OU.B
 	SOB	R0, 21$
 22$:
-
-
 
 	OU.BLK	BT.EGS
 
@@ -315,36 +333,24 @@ COMPIL:	CALL	PDECLS
 	.fclose
 
 
-	MOV	#LINK, R1
+	MOV	#SLINK, R1
 	MOV	#OBJFN1, R2
 	.strcat
 	MOVB	#C.COMM, (R2)
-	TST	(PC)+
-COONL:	.WORD	0		;SELF-MOD	 -c Compile only
-	BNE	FINISH
-	MOV	#$CLBUF, R1
-	MOV	#LINK, R2	; R1: #CLBUF here
+	MOV	(PC)+, R1
+LINK:	.WORD	1		;SELF-MOD	 0 means -c option (Compile only)
+	BNE	1$
+	JMP	exit		; exit(0)
+1$:	MOV	#$CLBUF, R1
+	MOV	#SLINK, R2	; R1: #CLBUF here
 	.strcpy
 	MOV	#CLIB, R2
 	.strcat
-;	.SUBRC	puts
 	.strlen
 	INC	R0		; Count '\0'
 	MOV	R0, -(R1)	; $CLLEN = strlen($CLBUF)
-;	BIS	#CHNIF$, $JSW
-	CALL	RESV10
-	CLR	R0
-	.EXIT
-
-PREPR1:	.TTYOUT	R1
-PREPRO:	PP.CHR		;!!!TODO Optimize. This is the only usage
-	BNE	PREPR1
-FINISH:	CLR	R1
-	PUSH	#exit
-		; Fallthrough
-;; Restore 10 vector
-RESV10::
-	MOV	$PINVO, 10
+	PUSH	$EXIT		;  CLR R0; .EXIT  -- Transfer control to LINK
+RESV10::MOV	$PINVO, 10
 	RETURN
 
 
@@ -359,8 +365,8 @@ OBJFN1:	.BYTE	C.SP
 OBJFN:	.BLKB	15
 
 ;; Link command line
-LINK:	.ASCIZ	"LINK/EXE:"
-LINKE:	.BLKB	30.		;!!!O
+SLINK:	.ASCIZ	"LINK/EXE:"
+SLINKE:	.BLKB	30.		;!!!O
 
 
 .END

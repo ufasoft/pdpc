@@ -48,7 +48,7 @@ EXIT9:
 ;	MOV	#1, $CLLEN
 	MOV	#CHNIF$, $JSW
 ;	CLR	$JSW
-	CLR	R0
+$EXIT::	CLR	R0
 	.EXIT
 
 

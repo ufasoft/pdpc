@@ -22,7 +22,7 @@
 ;; Standard C symbols
 .GLOBL	atexit, atof, atoi, atol, calloc, errno, exit, fclose, fopen, fgetc, fprintf, fputc, fputs, free, fseek, gmtime
 .GLOBL	isalnum, isdigit, isspace, itoa, ldiv, ltoa
-.GLOBL	perror, puts, realloc, stdout, stdin, stderr
+.GLOBL	perror, putchar, puts, realloc, stdout, stdin, stderr
 .GLOBL	snprintf, strlen, strcpy, strchr, strerror, strftime, strtol, isxdigit, time, toupper
 
 ;; libc extension symbols
@@ -49,7 +49,7 @@ EMFILE	=: 24.
 $PINVO	=: ^o120		; Previous Vector 10
 $SCRAT	=: ^o310		; Scratch buffer for temporary values
 $STKLO	=: ^o400
-$START	=: ^o2000		; Startup code, discarded after Runtime initialization
+$START	=: ^o2100		; Startup code, discarded after Runtime initialization
 $STACK	=: ^o3000
 
 

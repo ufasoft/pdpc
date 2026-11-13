@@ -316,11 +316,6 @@
 	TRAP	^o136
 .ENDM	SK.WS
 
-;; Read char after preprocessing
-.MACRO	PP.CHR
-	TRAP	^o137
-.ENDM	PP.CHR
-
 ;; Find word R1 in table, following this macro
 ;; OUTPUT: R1: number of symbol, CF=1
 ;; CF=0, if the Symbol not found
@@ -541,7 +536,7 @@
 
 ;; Add R1,R2 DWORD into dynamic vector ar
 .MACRO	PUSH.D	vec
-	TRAP	^o236
+	TRAP	^o137
 	.WORD	vec
 .ENDM	PUSH.D
 
