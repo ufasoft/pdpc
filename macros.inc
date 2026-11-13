@@ -20,7 +20,7 @@
 .MCALL	.CHAIN, .CSIGEN, .CSISPC, .EXIT, .GTJB, .PRINT, .SETTOP, .TRPSET, .SCCA, .SERR
 
 ;; Standard C symbols
-.GLOBL	atof, atoi, atol, calloc, errno, exit, fclose, fopen, fgetc, fprintf, fputc, fputs, free, fseek, gmtime
+.GLOBL	atexit, atof, atoi, atol, calloc, errno, exit, fclose, fopen, fgetc, fprintf, fputc, fputs, free, fseek, gmtime
 .GLOBL	isalnum, isdigit, isspace, itoa, ldiv, ltoa
 .GLOBL	perror, puts, realloc, stdout, stdin, stderr
 .GLOBL	snprintf, strlen, strcpy, strchr, strerror, strftime, strtol, isxdigit, time, toupper
@@ -46,8 +46,8 @@ EMFILE	=: 24.
 
 .GLOBL	$AREA
 
-;; Scratch buffer for temporary values
-$SCRAT	=: ^o310
+P.INVO	=: ^o120			; Previos Vector 10
+$SCRAT	=: ^o310		; Scratch buffer for temporary values
 ASTKLO	=: ^o400
 ASTART	=: ^o2000		; Startup code, discarded after Runtime initialization
 ASTACK	=: ^o3000

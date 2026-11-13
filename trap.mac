@@ -31,7 +31,7 @@ ST.OFF	= 14	; First Word Before Stack Frame ;   Number Of Saved Bytes In Stack F
 .GLOBL	LOCALS, ASCII, TMP2RA, TOKR
 .GLOBL	PBINAR, TSTKB, EXTYPE, SV.ASC, GDEF, SYMBS, $READ, I$RD, $I2L, DEFGSD, GSD
 .GLOBL	DCLTOR, TDECLS, IS.CE, GINI, TYPES, GINI, LINI
-.GLOBL	EXPR., CHR.R
+.GLOBL	EXPR., CHR.R, RESV10
 
 
 ;; Invalid opcode ISR (vector 10)
@@ -42,8 +42,7 @@ I.INVO::PUSH	R1
 	CMPB	(R1), #7400/400
 	BEQ	EMI
 	POP	R1
-	JMP	@(PC)+
-P.INVO::.WORD	0			; Previou Vector 10
+	JMP	@P.INVO
 
 ;; .EMI
 EMI:	MOVB	-(R1), R1
@@ -163,6 +162,7 @@ TRPERR:	MOV	#ASTACK-200, SP		; Don't touch command line arguments
 	MOVB	R0, R1			; .ERR processing
 	BEQ	8$			; TRAP 0 (Stack Overflow)
 .IF NE C$CC
+	CALL	RESV10
 	MOV	CURINP, R5
 	BEQ	2$
 	CMP	-(R3), -(R3)		; R3: 6
@@ -307,10 +307,12 @@ CALLS.:	PUSH	R1
 	MOV	R4, PC.OFF+2(SP)	; R0 determines Flags
 	.malloc
 	BNE	PSUBRR
-	BR	ERR.B
+	BR	EOOM
 CALLO.:	.malloc
 CALLO1:	BNE	SUBR.R
-ERR.B:	JMP	.OOM
+EOOM:
+.IIF NE C$CC	CALL	RESV10
+	JMP	.OOM
 
 REALO.:	.SUBRC	realloc
 	BR	CALLO1
