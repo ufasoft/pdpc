@@ -21,7 +21,7 @@
 . = 34
 	.WORD	I.TRAP, 340
 . = $USRSP
-	.WORD	1000		; Temporary Stack, switches to 3000 after initialization
+	.WORD	$ISTAC		; Temporary Stack, switches to $STACK or higher after initialization
 
 
 .ASECT

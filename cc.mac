@@ -23,35 +23,13 @@ C$CC	= 1
 . = $JSW
 	.WORD	CHNIF$
 
-. = 1000
 
+. = $ISTAC
 
-;; Macro sefinitions
-MDEFS::
-
-
-5$:
-ERR.B:	.ERR
-
-
-. = 1000
-
-
-HELP:	.ASCII	"PDP C Compiler 2026.3 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
-        .ASCII	"Usage: CC [options] file.c"<C.NL>
-        .ASCII	"OPTIONS:"<C.NL>
-        .ASCII	" -c"<C.HT><C.HT>"Compile, but don't link"<C.NL>
-        .ASCII	" -D sym"<C.HT><C.HT>"Define sym=1"<C.NL>
-        .ASCII	" -E"<C.HT><C.HT>"Preprocess"<C.NL>
-        .ASCIZ	" -o fname"<C.HT>"Place output in fname"
-
-INVOPT::.ASCIZ	"Invalid option"
-
-.EVEN
 
 PHELP:	MOV	#HELP, R1
 	CALL	puts
-	JMP	EXIT
+CCEXIT:	JMP	exit
 
 ;; Change filename ext
 ;; R1: filename, R3: new ext including dot
@@ -64,13 +42,29 @@ CHEXT:	MOV	#'., R2
 RET.C:	RETURN
 
 
-;!!!R :	MOV	CURFN, R1
-ERR.R1:
+
 ERREXI::CALL	perror
 	MOV	errno, R1
-	JMP	exit
+	BR	CCEXIT
 	; Unreachable
 
+;; -E option
+;; Preprocess only
+PREPR3:	MOVB	(R0)+, R1		; Read pre-read token (from ASCII)
+	BEQ	CHRPP1
+	MOV	R0, (R2)
+	CALL	putchar
+PREPRO:	MOV	SP, IS.OPE		; Allow T.SP tokens
+	MOV	#MODTOK, R2
+	MOV	(R2), R0
+	BNE	PREPR3
+	R.TOK
+	BEQ     CCEXIT			; exit(0)
+CHRPP2:	TST	ASCII+2
+	BEQ	CHRPP2
+	MOV	ASCII, R1
+CHRPP1:	MOV	R1, (R2)
+	BR	PREPRO
 
 
 MAIN::	MOV	#10, R5
@@ -119,7 +113,7 @@ PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 	MOV	#OBJFN, R1
 	MOV	#WMODE, R2
 	.fopen
-	BEQ	ERR.R1
+	BEQ	ERREXI
 	MOV	R0, OBJSTM
 
 	MOV	$DEVBL+2, R1	; Module name
@@ -137,24 +131,6 @@ PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 
 
 
-;; -E option
-;; Preprocess only
-PREPR3:	MOVB	(R0)+, R1		; Read pre-read token (from ASCII)
-	BEQ	CHRPP1
-	MOV	R0, (R2)
-	CALL	putchar
-	BR	PREPRO
-CHRPP2:	TST	ASCII+2
-	BEQ	CHRPP2
-	MOV	ASCII, R1
-CHRPP1:	MOV	R1, (R2)
-PREPRO:	MOV	SP, IS.OPE		; Allow T.SP tokens
-	MOV	#MODTOK, R2
-	MOV	(R2), R0
-	BNE	PREPR3
-	R.TOK
-	BNE	CHRPP2
-	JMP	exit			; exit(0)
 
 OPTION:	MOVB	1(R2), R1
 	switch
@@ -185,6 +161,16 @@ OUTFN:	.WORD	0       ;SELF-MOD	OUTFN Output (.SAV) filename
 	BR	PAARGV
 
 MODTOK:	.WORD	0		; Pointer in the current Token
+
+HELP:	.ASCII	"PDP-11 C Compiler 2026.3 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
+        .ASCII	"Usage: CC [options] file.c"<C.NL>
+        .ASCII	"OPTIONS:"<C.NL>
+        .ASCII	" -c"<C.HT><C.HT>"Compile, but don't link"<C.NL>
+        .ASCII	" -D sym"<C.HT><C.HT>"Define sym=1"<C.NL>
+        .ASCII	" -E"<C.HT><C.HT>"Preprocess"<C.NL>
+        .ASCIZ	" -o fname"<C.HT>"Place output in fname"
+
+INVOPT::.ASCIZ	"Invalid option"
 
 WMODE:	.ASCIZ	"w"
 OBJEXT:	.ASCIZ	".OBJ"
@@ -331,7 +317,6 @@ COMPIL:	CALL	PDECLS
 
 	MOV	OBJSTM, R1
 	.fclose
-
 
 	MOV	#SLINK, R1
 	MOV	#OBJFN1, R2
