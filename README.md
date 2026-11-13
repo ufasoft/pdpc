@@ -18,7 +18,7 @@ Developer's kit for RT-11: [pdpc.7z](https://ufasoft.com/files/pdpc/pdpc.7z)
 
 Floppy disk image for УКНЦ: [ccuknc.dsk](https://ufasoft.com/files/pdpc/ccuknc.dsk)
 
-Floppy disk image for БК-0011М: [ccuknc.dsk](https://ufasoft.com/files/pdpc/cc-osbk.dsk)
+Floppy disk image for БК-0011М: [cc-osbk.dsk](https://ufasoft.com/files/pdpc/cc-osbk.dsk)
 
 **Author:** Sergey Pavlov (dev@ufasoft.com)
 
