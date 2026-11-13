@@ -1,0 +1,26 @@
+;;; Copyright (c) 2026 Ufasoft  https://ufasoft.com  mailto:support@ufasoft.com,  Sergey Pavlov  mailto:dev@ufasoft.com
+;;;
+;;; SPDX-License-Identifier: MIT
+
+.TITLE	SLEEP
+
+.INCLUDE /macros.inc/
+
+.GLOBL	time
+
+
+.PSECT	.text
+
+;; unsigned sleep(unsigned sec)
+sleep::
+	MOV	R1, R2		; R2: sec
+	CLR	R1
+	.SUBRC	time
+	ADD	R0, R2
+1$:	.SUBRC	time
+	CMP	R0, R2
+	BLT	1$
+	CLR	R0
+	RETURN
+
+.END
