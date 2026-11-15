@@ -985,12 +985,8 @@ DFUN:	MOV	R3, R1
 
 
 
-GNDEF:	MOV	#-1, R1
-	PUSH.W	VARS		; Offset in TEXT
+GNDEF:	PUSH.W	VARS, -1	; Offset in TEXT
 RET.G:	RETURN
-
-
-
 
 
 
@@ -998,7 +994,6 @@ RET.G:	RETURN
 
 NOTTAB:	.BYTE	BNOT$L, BNOT$I, LNOT$L, LNOT$I
 NEGTAB:	.BYTE	NEG$L, NEG$I
-
 
 
 

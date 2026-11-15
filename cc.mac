@@ -140,25 +140,16 @@ PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 	BEQ	ERREXI
 	MOV	R0, OBJSTM
 
-	MOV	$DEVBL+2, R1	; Module name
+	MOV	$DEVBL+2, R1		; Module name
 	MOV	$DEVBL+4, R2
 	CLR	R3
 	CALL	DGSD
 
-	MOV	#^r$FR, R1	; reference $FREEL symbol to link CRT0.OBJ module
-	MOV	#^rEEL, R2
-	MOV	#4*400+100, R3	; Global Symbol Name
-	CALL	DGSD
+	.GSD	<. ABS.>, 5, 104, 0	; some Section must be first
 
+	.GSD	<$FREEL>, 4, 100, 0	; reference $FREEL symbol to link CRT0.OBJ module
+	.GSD	<$RTSTK>, 4, 110, $STACK
 
-	MOV	#^r$RT, R1	; $RTSTK
-	MOV	#^rSTK, R2
-	PUSH.D	GSD
-	MOV	#4*400+110, R1	; Global Symbol Name
-	MOV	#$STACK, R2
-	PUSH.D	GSD
-
-	.GSD	<. ABS.>, 5, 104, 0
 	.GSD	<.text >, 5, 40, 0	; Relocatable I-section
 
 ;!!!R	PUSH.W	TEXT		; Reserve for .START reference
@@ -307,9 +298,7 @@ IN.DEFN::.WORD	0		; 1: inside defun
 ERR.D:	.ERR
 
 
-ECOMPI:
-;!!!T	.GSD	<.rdata>, 5, 40, 0	; Relocatable I-section
-	.GSD	<.rdata>, 5, 260, 0	; Relocatable read-only D-section
+ECOMPI:	.GSD	<.rdata>, 5, 260, 0	; Relocatable read-only D-section
 
 	MOV	GSD, R3
 	MOV	TEXT+2, 46(R3)		; Write `Maximum length` field of .text P-Sect entry in GSD

@@ -16,8 +16,15 @@ CC.OBJ : cc.mac macros.inc ccmacr.inc CC.MLB
 	$(MACRO11) /LIST:cc.lst cc.mac+cc.mlb/LIB
 
 libc/C.LIB :
-	REM cd libc
-	REM make
+	cd libc
+	make
+
+test:
+	cd test
+	make
 
 clean:
 	-rm *.LIB *.LST *.MAP *.MLB *.OBJ *.SAV
+
+
+.PHONY: all clean test
