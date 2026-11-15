@@ -8,12 +8,13 @@
 
 .INCLUDE /macros.inc/
 
-.IF NE C$CC
-	.INCLUDE /ccmacr.inc/
-.ENDC
+;!!!R .IF NE C$CC
+;!!!R 	.INCLUDE /ccmacr.inc/
+;!!!R .ENDC
 
 .GLOBL	$ITRAP, $EXIT1, $EHEAP, $FREEL, $R50A4, MAIN
 
+.GLOBL	$RTSTK			; Runtime stack
 
 .ASECT
 
@@ -52,11 +53,15 @@ COPCL:	MOVB	(R5)+, -(R2)
 ;; Parse Command Line
 ;; Allocates argv in Stack
 ;; Returns:  R1: argc, R2: argv
-PARCL::
-	MOV	(PC)+, R1
-ISTK:
-.IIF NE C$CC	.WORD	CC$STK
-.IIF EQ C$CC	.WORD	$STACK
+PARCL::	MOV	#$RTSTK, R1
+	BNE	4$
+	MOV	#CC$STK, R1
+4$:
+
+;!!!R	MOV	(PC)+, R1
+;!!!R	ISTK:
+;!!!R	.IIF NE C$CC	.WORD	CC$STK
+;!!!R	.IIF EQ C$CC	.WORD	$STACK
 
 	CLR	-(R1)		; Reserve a word in Stack as space for changing filename extension of argv[1]
 	MOV	#$CLBUF, R2

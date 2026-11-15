@@ -18,6 +18,8 @@ C$CC	= 1
 .GLOBL	ERREXI, PPDEF, PPCUR, OPNINP, PDECLS, PPDEF, GSD, SYMBS, VARS, ABSS, EBSS, OBJSTM, TYPES
 .GLOBL	TEXT, RDATA, RELOCS, DGSD, I.INVO, $EXIT, TMP2R1
 
+$RTSTK == 0		; To define max available Stack
+
 .ASECT
 
 . = $JSW
@@ -148,6 +150,13 @@ PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 	MOV	#4*400+100, R3	; Global Symbol Name
 	CALL	DGSD
 
+
+	MOV	#^r$RT, R1	; $RTSTK
+	MOV	#^rSTK, R2
+	PUSH.D	GSD
+	MOV	#4*400+110, R1	; Global Symbol Name
+	MOV	#$STACK, R2
+	PUSH.D	GSD
 
 	.GSD	<. ABS.>, 5, 104, 0
 	.GSD	<.text >, 5, 40, 0	; Relocatable I-section
@@ -303,7 +312,7 @@ ECOMPI:
 	.GSD	<.rdata>, 5, 260, 0	; Relocatable read-only D-section
 
 	MOV	GSD, R3
-	MOV	TEXT+2, 36(R3)		; Write `Maximum length` field of .text P-Sect entry in GSD
+	MOV	TEXT+2, 46(R3)		; Write `Maximum length` field of .text P-Sect entry in GSD
 	ADD	GSD+2, R3
 	MOV	RDATA+2, -(R3)		; Write `Maximum length` field of .rdata P-Sect entry in GSD
 

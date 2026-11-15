@@ -50,7 +50,7 @@ $PINVO	=: ^o120		; Previous Vector 10
 $SCRAT	=: ^o310		; Scratch buffer for temporary values
 $STKLO	=: ^o400
 $ISTAC	=: ^o1000		; Temporary stack, active during initialization
-$START	=: ^o2200		; Startup code, discarded after Runtime initialization
+$START	=: ^o2300		; Startup code, discarded after Runtime initialization
 $STACK	=: ^o3000
 
 
