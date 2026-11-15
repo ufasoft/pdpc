@@ -12,14 +12,14 @@
 	.INCLUDE /ccmacr.inc/
 .ENDC
 
-.GLOBL	I.TRAP, $EXIT1, $EHEAP, $FREEL, R50TA4, MAIN
+.GLOBL	$ITRAP, $EXIT1, $EHEAP, $FREEL, $R50A4, MAIN
 
 
 .ASECT
 
 
 . = 34
-	.WORD	I.TRAP, 340
+	.WORD	$ITRAP, 340
 . = $USRSP
 	.WORD	$ISTAC		; Temporary Stack, switches to $STACK or higher after initialization
 
@@ -98,7 +98,7 @@ CARGV0:
 
 5$:	SUB	#10, R3
 	MOV	#$SCRAT, R4
-	JSR	R5, R50TA4
+	JSR	R5, $R50A4
 	MOV	#COPCL, R0
 	JSR	R5, (R0)
 	.BYTE	0, 3
@@ -134,7 +134,8 @@ ARGV:	.WORD	ARGV+2
 
 
 
-.PSECT	.bss
+.TEXT	; because it has to be WORD-aligned
+
 
 ;; Order does matter, used in free()
 $AHEAP::.WORD	0	; Start of Heap
@@ -144,6 +145,7 @@ $EHEAP == $FREEL + 2
 
 ;$FREEL::.WORD	0	; Free block list
 ;$EHEAP::.WORD	0	; End of Heap
+
 
 
 .END	.start

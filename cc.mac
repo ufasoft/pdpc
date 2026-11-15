@@ -159,20 +159,17 @@ PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 	TST	(PC)+
 LINK:	.WORD	1		;SELF-MOD	 0 means -c option (Compile only)
 	BEQ	8$
-	MOV	#SLINK, R1
+	MOV	#$CLBUF, R1
+	MOV	#SLINK, R2
+	.strcpy
 	MOV	#OBJFN1, R2
 	.strcat
 	MOV	#CLIB, R2
 	.strcat
-	PUSH.S	TMP
-	CALL	TMP2R1
-	MOV	R1, LNKCMD
 	.strlen
 	INC	R0
-	MOV	R0, $CLLEN	; $CLLEN = strlen(LNKCMD)+1
+	MOV	R0, $CLLEN	; $CLLEN = strlen(#$CLBUF)+1
 8$:	JMP	COMPIL
-
-
 
 
 HELP:	.ASCII	"PDP C Compiler 2026.3 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
@@ -197,8 +194,7 @@ OBJFN:	.BLKB	15
 
 ;; Link command line
 SLINK:	.ASCIZ	"LINK/EXE:"
-SLINKE:	.BLKB	10.		;!!!O
-;; Uses space after  this. Must be the last definition in this section
+SLINKE:	.BLKB	15.
 
 .EVEN
 
@@ -392,19 +388,11 @@ ECOMPI:
 	MOV	OBJSTM, R1
 	.fclose			;!!!O use exit()'s featurn of file closing
 
-	CLR	R0
-	MOV	(PC)+, R2
-LNKCMD:	.WORD	0		;SELF-MOD	Link command
+	MOV	LINK, R0
 	BEQ	RET.E		; `return 0` from main() calls `exit(0)`
-	MOV	#$CLBUF, R1
-	.strcpy
 	PUSH	#$EXIT		;  CLR R0; .EXIT  -- Transfer control to LINK
 RESV10::MOV	$PINVO, 10
 RET.E:	RETURN
-
-
-.RDATA
-
 
 
 .END

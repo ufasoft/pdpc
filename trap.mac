@@ -143,7 +143,7 @@ RTS.R3:	RTS	R3
 
 ;; TRAP instruction handler
 ;; Saves all registers except R1
-I.TRAP::
+$ITRAP::
 	PUSH	R5, R4, R3, R2
 	PUSH	12(SP)			; PSW
 	MOV	12(SP), R4
