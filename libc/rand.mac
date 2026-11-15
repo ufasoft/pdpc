@@ -7,7 +7,7 @@
 
 .INCLUDE /macros.inc/
 
-.PSECT	.text
+.TEXT
 
 
 ;; int rand(void)

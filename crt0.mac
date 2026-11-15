@@ -37,8 +37,8 @@ COPCL:	MOVB	(R5)+, -(R2)
 	RTS	R5
 
 
-;; Entry point
-.START::
+;; Entry point _start
+.start::
 
 ;	MOV	$USRTO, R0
 ;	TST	(R0)+
@@ -132,11 +132,6 @@ ARGV:	.WORD	ARGV+2
 . = $STACK
 .INCLUDE	/thunk.mac/
 
-;. = 7000
-;.INCLUDE	/trap.mac/
-
-
-
 
 
 .PSECT	.bss
@@ -151,6 +146,4 @@ $EHEAP == $FREEL + 2
 ;$EHEAP::.WORD	0	; End of Heap
 
 
-
-
-.END	.START
+.END	.start

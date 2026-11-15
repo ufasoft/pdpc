@@ -9,7 +9,7 @@
 
 .GLOBL
 
-.PSECT	.text
+.TEXT
 
 ;;int brk(void *addr)
 brk::

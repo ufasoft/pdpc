@@ -10,7 +10,7 @@
 .GLOBL	$MUL5, $DIV5, $STRTO
 
 
-.PSECT	.text
+.TEXT
 
 ;; double atof(const char*)
 atof::

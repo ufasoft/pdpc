@@ -8,7 +8,7 @@
 
 .INCLUDE /macros.inc/
 
-.PSECT	.text
+.TEXT
 
 ;; (float)int
 I$F::	CLR	-(SP)

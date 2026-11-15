@@ -7,9 +7,9 @@
 
 .INCLUDE /macros.inc/
 
-.GLOBL	R.FREA
+.GLOBL	$RFREA
 
-.PSECT	.text
+.TEXT
 
 ;; size_t fwrite(const void* buffer, size_t size, size_t count, FILE* stream)
 fwrite::
@@ -24,7 +24,7 @@ fwrite::
 	BMI	8$
 	INC	R5
 	SOB	R3, 2$
-8$:	JMP	R.FREA
+8$:	JMP	$RFREA
 9$:	RETURN			;!!!TODO Optimize
 
 

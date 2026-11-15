@@ -13,7 +13,7 @@
 TESTCH	= 0		; Channel, always available for short-time operations
 
 
-.PSECT	.text
+.TEXT
 
 ;; int remove(const char* filename)
 remove::

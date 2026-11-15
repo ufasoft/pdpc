@@ -7,14 +7,14 @@
 
 .INCLUDE /macros.inc/
 
-.GLOBL	STDSTM
+.GLOBL	$DFSTM
 
-.PSECT	.text
+.TEXT
 
 ;; void perror(const char *s)
 perror::
 	MOV	(PC)+, R2
-stderr::.WORD	 STDSTM
+stderr::.WORD	 $DFSTM
 	TST	R1
 	BEQ	1$
 	TSTB	(R1)

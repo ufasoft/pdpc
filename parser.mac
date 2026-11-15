@@ -12,8 +12,8 @@
 .GLOBL	FISYM, FISYM1, EXTYPE, TH.SBR, TH.UBR, IS.ARG, ENUMS, SYNAM0, SYNAM1, IS.INV
 .GLOBL	RETUR, PAINT, MEMSTM, IS.OPE, BNDARG, GENBIN, NO.EXP, GSD, VARS, LOCALS, EMIOF5, P$LAD
 .GLOBL	TDEFS, EMADD, TMP2R1, ASMSTM, TMP, EXPANS, LOCFUN, $DRD, GOTOS, LABELS, ARITH, BEGAGG, AGGLV
-.GLOBL	TEXT, RDATA, RELOCS, HAS.TO, TYPES
-.GLOBL	EXPR.2
+.GLOBL	TEXT, RDATA, RELOCS, HAS.TO, TYPES, IN.DEFN
+.GLOBL	EXPR.2, TYOREX
 
 .PSECT
 
@@ -49,21 +49,6 @@ DEFSYM:	MOV	GSD, R5
 
 
 
-;; Type of Expression in parenthesis
-;; OUTPUT:
-;;   CF=0 - Expression. The type is in EXTYPE. R2: TEXT offset of the beginning of the expression code
-;;   CF=1 - R1: Type
-TYOREX:	.TYPEP
-	BCS	5$
-	MOV	TEXT+2, R2
-	.PEXPP			; CF: 0
-	RETURN
-5$:	MOV	R1, R3
-	T.DCL
-	CK.TOK	T.RPAR
-	MOV	R2, R1
-	SEC
-	RETURN
 
 
 
@@ -382,6 +367,18 @@ PENUV:	PUSH	R1
 EMEUNA:	.EMIT
 EUNA.A:	BR	EUNAR
 
+LNOT:	.UNARY
+	CAST.B
+	.EMI	I$LNO
+	BR	EUNA.A
+
+PNEG:	P.UNRV
+	MOV	#NEGTAB, R5
+	CMP	R1, #TY.FLT
+	BNE	BLNOT1
+	.EMI	F$NEG
+EUNA.B:	BR	EUNA.A
+
 ;; Constant Address expression
 CADDR:	G.SYMB
 CADDR1:	.EMI	PU$16
@@ -408,6 +405,23 @@ ADDRO1:	NEG	R1
 ADDRO2:	PTR.OF			; find pointer type
 ADDRO3:	PU.EXT
 RET.B:	RETURN
+
+
+
+
+BNOT:	ADD	#NOTTAB - T.NOT, R1
+	MOV	R1, R5
+	P.UNRV
+BLNOT1:	PUSH	R1
+	ASR	R1
+	CMP	R1, #TY.L/2
+	BEQ	2$
+	CAST.I
+	INC	R5
+2$:	CALL	EMIOF5
+UNAEND:	POP	R1		; the same type
+	BR	EUNA.B
+
 
 ;; Parse Variable reference in expression
 PAVAR:	.SYMB
@@ -484,7 +498,7 @@ CURSYM:	.WORD	0		; Current Symbol
 	BNE	5$		; Function
 	NEG	R1		; L-Value
 5$:	PU.EXT
-EUNA.B:	BR	EUNA.A
+EUNA.C:	BR	EUNA.B
 
 
 DEFARG:	PP.SYM
@@ -527,61 +541,6 @@ IS.PP::	.WORD	0			; Preprocessor Mode ON (limited expressions)
 
 
 
-PNEG:	P.UNRV
-	MOV	#NEGTAB, R5
-	CMP	R1, #TY.FLT
-	BNE	BLNOT1
-	.EMI	F$NEG
-EUNA.C:	BR	EUNA.B
-
-
-LNOT:	.UNARY
-	CAST.B
-	.EMI	I$LNO
-	BR	EUNA.C
-
-
-BNOT:	ADD	#NOTTAB - T.NOT, R1
-	MOV	R1, R5
-	P.UNRV
-BLNOT1:	PUSH	R1
-	ASR	R1
-	CMP	R1, #TY.L/2
-	BEQ	2$
-	CAST.I
-	INC	R5
-2$:	CALL	EMIOF5
-UNAEND:	POP	R1		; the same type
-	BR	EUNA.C
-
-
-
-;; Parge unary argument
-PUNARY::G.TOK
-	MOV	#T.ADD&177, R2		; Used in INCR
-	switch
-	case	T.SYM	, EMSYM
-	case	T.LPAR	, LPAR
-	case	T.NOT	, BNOT		; ~
-	case	T.LNOT	, LNOT		; !
-	case	T.SUB	, PNEG		; -
-	case	T.ADD	, PUNARY	; +
-	case	T.AST	, DEREF		; *
-	case	T.INCR	, INCR		; ++
-	case	T.DECR	, DECR		; --
-	case	T.AND	, ADDROF	; &
-	case	T.LFLT	, EMFLT		; float literal
-.IIF NE C$DBL	case	T.LDBL	, EMDBL
-	case	T.LINT	, EMINT		; int literal
-	case	T.LLNG	, EMLNG		; long literal
-	case	T.SIZE	, SIZEOF
-	case	T.LSTR	, EMISTR	; string literal
-	default
-ERR.F:	.ERR
-
-
-
-
 
 
 SIZEOF:	MOV	RELOCS+2, R3
@@ -607,6 +566,31 @@ EMLNG2:	MOV	(PC)+, R1
 TOKVA1::.WORD	0
 	.EMIT
 	BR	EM.SCR
+
+
+;; Parge unary argument
+PUNARY::G.TOK
+	MOV	#T.ADD&177, R2		; Used in INCR
+	switch
+	case	T.SYM	, EMSYM
+	case	T.LPAR	, LPAR
+	case	T.NOT	, BNOT		; ~
+	case	T.LNOT	, LNOT		; !
+	case	T.SUB	, PNEG		; -
+	case	T.ADD	, PUNARY	; +
+	case	T.AST	, DEREF		; *
+	case	T.INCR	, INCR		; ++
+	case	T.DECR	, DECR		; --
+	case	T.AND	, ADDROF	; &
+	case	T.LFLT	, EMFLT		; float literal
+.IIF NE C$DBL	case	T.LDBL	, EMDBL
+	case	T.LINT	, EMINT		; int literal
+	case	T.LLNG	, EMLNG		; long literal
+	case	T.SIZE	, SIZEOF
+	case	T.LSTR	, EMISTR	; string literal
+	default
+ERR.F:	.ERR
+
 
 
 
@@ -745,6 +729,16 @@ TERNAR:	EM.POP
 	.CAST
 	BR	PCOLON
 
+;; Emit code for modifying L-Value
+DREAD:	.EXTYP
+	BPL	ERR.F		; non L-Value
+	NEG	R1
+	PU.EXT
+	SZ.TYP
+	.EMI	$DRD
+EMRE:	.EMIT
+	RETURN
+
 
 ;; &&, ||
 PANDOR:	CAST.B
@@ -776,15 +770,6 @@ EMSTR1:
 	RETURN
 
 
-;; Emit code for modifying L-Value
-DREAD:	.EXTYP
-	BPL	ERR.D		; non L-Value
-	NEG	R1
-	PU.EXT
-	SZ.TYP
-	.EMI	$DRD
-EMRE:	.EMIT
-	RETURN
 
 
 INIPTR:	CMP	(R0)+, (R0)+
@@ -851,7 +836,7 @@ LNGOTO:
 	BMI	8$
 	MOV	(R3)+, R1
 	.FIND2	LABELS
-	BCC	BCCERR		; Undefined label
+	BCC	ERR.9		; Undefined label
 	MOV	R2, R5		; R5: SP offset
 	MOV	R1, R2		; Target
 	MOV	(R3)+, R1	; TEXT-offset to place
@@ -863,7 +848,6 @@ LNGOTO:
 	.CLEAR	LABELS
 	JMP	EMRET		; .EMIT T$RET; RETURN
 
-ERR.D:	.ERR
 
 
 ;; Init Global char array by string literal
@@ -925,21 +909,6 @@ COMAGG:	TST	(SP)+
 	CK.TOK	T.RBRC
 	BR	EAGGLV
 
-;; Global typedef
-GTYPED:	PUSH	#PDECL0
-		; Fallthrough
-;; typedef
-TYPEDEF::
-	.TYPEP
-BCCERR:	BCC	ERR.D
-	MOV	R1, R3
-	INCB	IN.DEFN
-1$:	T.DCL
-	PUSH.D	TDEFS
-	IF.TOK	T.COMM, 1$
-	CLR	(PC)+
-IN.DEFN:.WORD	0		; 1: inside defun
-	RETURN
 
 GINSCT:	JSR	R0, BEGAGG
 	ADD	TYPES, R3
@@ -980,7 +949,7 @@ GINI::	MOV	R3, R1
 	case	TC.ARR	, GINARR
 	case	TC.SCT	, GINSCT
 	default
-	.ERR	9.
+ERR.9:	.ERR	9.
 
 ;; Process top-level definition
 GDEF::	CLR	LOCALS+2
@@ -1019,32 +988,6 @@ DFUN:	MOV	R3, R1
 	IF.TOK	T.LBRC, DEFUN
 	RETURN
 
-PDECL0:	CK.TOK	T.SEMI		; Check for ';'
-;; Parse top-level decls
-PDECLS::
-	CLR	(PC)+
-IS.STA::.WORD	0		; Static declaration
-	CLRB	(PC)+
-IS.EXT::.WORD	0		; Extern declaration
-PDECL1:	R.TOK
-	BEQ	RET.G
-	CLR	R2
-	switch
-	case	T.TYPE	, GTYPED
-	case	T.EXTE	, EXTERN
-	case	T.STAT	, STATIC
-	default
-	.TYPP2
-	BCC	BCCERR
-	MOV	R1, (PC)+
-CURTYP::.WORD	0		;!!!? Type of multiple variables declarations
-	MOV	R1, R3
-	IF.TOK	T.SEMI, PDECLS	; enum/struct definition without vars
-2$:	.SUBRC	GDEF
-	ASRB	IN.DEFN
-	BCS	PDECLS
-	IF.TOK	T.COMM, 2$
-	BR	PDECL0
 
 
 GNDEF:	MOV	#-1, R1
@@ -1053,11 +996,6 @@ RET.G:	RETURN
 
 
 
-EXTERN:	INCB	IS.EXT
-	BR	PDECL1
-
-STATIC:	INCB	IS.STA
-	BR	PDECL1
 
 
 

@@ -9,7 +9,7 @@
 
 .GLOBL	strrev
 
-.PSECT	.text
+.TEXT
 
 ;; char* itoa(int value, char* buf, int base)
 itoa::

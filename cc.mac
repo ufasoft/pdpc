@@ -16,7 +16,7 @@ C$CC	= 1
 
 
 .GLOBL	ERREXI, PPDEF, PPCUR, OPNINP, PDECLS, PPDEF, GSD, SYMBS, VARS, ABSS, EBSS, OBJSTM, TYPES
-.GLOBL	TEXT, RDATA, RELOCS, DGSD, I.INVO, $EXIT
+.GLOBL	TEXT, RDATA, RELOCS, DGSD, I.INVO, $EXIT, TMP2R1
 
 .ASECT
 
@@ -50,36 +50,58 @@ ERREXI::CALL	perror
 
 ;; -E option
 ;; Preprocess only
-PREPR3:	MOVB	(R0)+, R1		; Read pre-read token (from ASCII)
-	BEQ	CHRPP1
-	MOV	R0, (R2)
-	CALL	putchar
 PREPRO:	MOV	SP, IS.OPE		; Allow T.SP tokens
-	MOV	#MODTOK, R2
-	MOV	(R2), R0
-	BNE	PREPR3
 	R.TOK
 	BEQ     CCEXIT			; exit(0)
 CHRPP2:	TST	ASCII+2
-	BEQ	CHRPP2
+	BEQ	PREPRO
 	MOV	ASCII, R1
-CHRPP1:	MOV	R1, (R2)
+	MOV	stdout, R2
+	.fputs
 	BR	PREPRO
 
 
-MAIN::	MOV	#10, R5
+OPTION:	MOVB	1(R2), R1
+	switch
+	case	'D	, 5$
+	case	'E	, 7$
+	case	'c	, 8$
+	case	'o	, 3$
+	default
+	MOV	#INVOPT, R1
+	CALL	puts
+9$:	.ERR	1
+
+5$:	CMPB	(R2)+, (R2)+
+	TSTB	(R2)
+	BNE	2$
+	MOV	(R4)+, R2
+	BEQ	9$
+2$:	MOV	R2, R1
+	MOV	#ONE, R2
+	.SUBRC	PPDEF
+	BR	PARGV
+
+7$:	INCB	PPONL
+8$:	CLR	LINK
+	BR	PARGV
+3$:	MOV	(R4)+, (PC)+
+OUTFN:	.WORD	0       ;SELF-MOD	OUTFN Output (.SAV) filename
+	BR	PARGV
+
+main::
+;; Install Invalid Opcode Trap Handler
+	MOV	#10, R5
 	CMP	(R5), #I.INVO
 	BEQ	1$		; avoid double ISR chaining
 	MOV	(R5), $PINVO
 	MOV	#I.INVO, (R5)
 1$:	MOV	#RESV10, R1
-	CALL	atexit
-	; DEC	R1
-	; BEQ	PHELP		; argc == 1
+	CALL	atexit     	; Register original handler restoring on exit()
 
 	MOV	R2, R4		; R4: argv
 	TST	(R4)+		; R4: &argv[1]
-PAARGV:	MOV	(R4)+, R2
+PARGV:	MOV	(R4)+, R2
 	BEQ	PHELP
 	MOVB	(R2), R1
 	switch
@@ -89,7 +111,7 @@ PAARGV:	MOV	(R4)+, R2
 	MOV	R2, CURFN	; Source filename
 	MOV	#OBJFN, R1
 	.strcpy
-	TSTB	SLINKE-1		; char after LINK:/EXE
+	TSTB	SLINKE-1	; char after LINK:/EXE
 	BNE	12$
 	MOV	OUTFN, R2
 	BNE	11$
@@ -121,48 +143,39 @@ PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 	CLR	R3
 	CALL	DGSD
 
+	MOV	#^r$FR, R1	; reference $FREEL symbol to link CRT0.OBJ module
+	MOV	#^rEEL, R2
+	MOV	#4*400+100, R3	; Global Symbol Name
+	CALL	DGSD
+
+
 	.GSD	<. ABS.>, 5, 104, 0
 	.GSD	<.text >, 5, 40, 0	; Relocatable I-section
 
 ;!!!R	PUSH.W	TEXT		; Reserve for .START reference
 ;!!!R	.GSD	<.start>, 4, 100, 0	; Global Symbol `_start` to link CRT0.OBJ
 
-	JMP	COMPIL
+
+	TST	(PC)+
+LINK:	.WORD	1		;SELF-MOD	 0 means -c option (Compile only)
+	BEQ	8$
+	MOV	#SLINK, R1
+	MOV	#OBJFN1, R2
+	.strcat
+	MOV	#CLIB, R2
+	.strcat
+	PUSH.S	TMP
+	CALL	TMP2R1
+	MOV	R1, LNKCMD
+	.strlen
+	INC	R0
+	MOV	R0, $CLLEN	; $CLLEN = strlen(LNKCMD)+1
+8$:	JMP	COMPIL
 
 
 
 
-OPTION:	MOVB	1(R2), R1
-	switch
-	case	'D	, 5$
-	case	'E	, 7$
-	case	'c	, 8$
-	case	'o	, 3$
-	default
-	MOV	#INVOPT, R1
-	CALL	puts
-9$:	.ERR	1
-
-5$:	CMPB	(R2)+, (R2)+
-	TSTB	(R2)
-	BNE	2$
-	MOV	(R4)+, R2
-	BEQ	9$
-2$:	MOV	R2, R1
-	MOV	#ONE, R2
-	.SUBRC	PPDEF
-	BR	PAARGV
-
-7$:	INCB	PPONL
-8$:	CLR	LINK
-	BR	PAARGV
-3$:	MOV	(R4)+, (PC)+
-OUTFN:	.WORD	0       ;SELF-MOD	OUTFN Output (.SAV) filename
-	BR	PAARGV
-
-MODTOK:	.WORD	0		; Pointer in the current Token
-
-HELP:	.ASCII	"PDP-11 C Compiler 2026.3 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
+HELP:	.ASCII	"PDP C Compiler 2026.3 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
         .ASCII	"Usage: CC [options] file.c"<C.NL>
         .ASCII	"OPTIONS:"<C.NL>
         .ASCII	" -c"<C.HT><C.HT>"Compile, but don't link"<C.NL>
@@ -176,14 +189,23 @@ WMODE:	.ASCIZ	"w"
 OBJEXT:	.ASCIZ	".OBJ"
 SAVEXT:	.ASCIZ	".SAV"
 ONE:	.ASCIZ	"1"
+CLIB:	.ASCIZ	",C.LIB"
+
+OBJFN1:	.BYTE	C.SP
+OBJFN:	.BLKB	15
+
+
+;; Link command line
+SLINK:	.ASCIZ	"LINK/EXE:"
+SLINKE:	.BLKB	10.		;!!!O
+;; Uses space after  this. Must be the last definition in this section
 
 .EVEN
-
 
 .IIF	GT . - $START	.ERROR CC init code out of bounds
 
 
-.PSECT	.text
+.TEXT
 
 
 ;; Outputs up to 128. bytes of TEXT to .OBJ
@@ -226,14 +248,66 @@ INIRLD:	OU.BLK	BT.RLD
 	RTS	R5
 
 
+EXTERN:	INCB	IS.EXT
+	BR	PDECL1
 
-COMPIL:	CALL	PDECLS
+STATIC:	INCB	IS.STA
+	BR	PDECL1
 
+
+PDECL0:	CK.TOK	T.SEMI		; Check for ';'
+COMPIL:
+;; Parse top-level decls
+PDECLS::
+	CLR	(PC)+
+IS.STA::.WORD	0		; Static declaration
+	CLRB	(PC)+
+IS.EXT::.WORD	0		; Extern declaration
+PDECL1:	R.TOK
+	BEQ	ECOMPI
+	CLR	R2
+	switch
+	case	T.TYPE	, GTYPED
+	case	T.EXTE	, EXTERN
+	case	T.STAT	, STATIC
+	default
+	.TYPP2
+	BCC	BCCERR
+	MOV	R1, (PC)+
+CURTYP::.WORD	0		;!!!? Type of multiple variables declarations
+	MOV	R1, R3
+	IF.TOK	T.SEMI, PDECLS	; enum/struct definition without vars
+2$:	.SUBRC	GDEF
+	ASRB	IN.DEFN
+	BCS	PDECLS
+	IF.TOK	T.COMM, 2$
+	BR	PDECL0
+
+;; Global typedef
+GTYPED:	PUSH	#PDECL0
+		; Fallthrough
+;; typedef
+TYPEDEF::
+	.TYPEP
+BCCERR:	BCC	ERR.D
+	MOV	R1, R3
+	INCB	IN.DEFN
+1$:	T.DCL
+	PUSH.D	TDEFS
+	IF.TOK	T.COMM, 1$
+	CLR	(PC)+
+IN.DEFN::.WORD	0		; 1: inside defun
+	RETURN
+
+ERR.D:	.ERR
+
+
+ECOMPI:
 ;!!!T	.GSD	<.rdata>, 5, 40, 0	; Relocatable I-section
 	.GSD	<.rdata>, 5, 260, 0	; Relocatable read-only D-section
 
 	MOV	GSD, R3
-	MOV	TEXT+2, 26(R3)		; Write `Maximum length` field of .text P-Sect entry in GSD
+	MOV	TEXT+2, 36(R3)		; Write `Maximum length` field of .text P-Sect entry in GSD
 	ADD	GSD+2, R3
 	MOV	RDATA+2, -(R3)		; Write `Maximum length` field of .rdata P-Sect entry in GSD
 
@@ -316,42 +390,21 @@ COMPIL:	CALL	PDECLS
 	OU.FIN
 
 	MOV	OBJSTM, R1
-	.fclose
+	.fclose			;!!!O use exit()'s featurn of file closing
 
-	MOV	#SLINK, R1
-	MOV	#OBJFN1, R2
-	.strcat
-	MOVB	#C.COMM, (R2)
-	MOV	(PC)+, R1
-LINK:	.WORD	1		;SELF-MOD	 0 means -c option (Compile only)
+	MOV	(PC)+, R2
+LNKCMD:	.WORD	1		;SELF-MOD	Link command
 	BNE	1$
 	JMP	exit		; exit(0)
 1$:	MOV	#$CLBUF, R1
-	MOV	#SLINK, R2	; R1: #CLBUF here
 	.strcpy
-	MOV	#CLIB, R2
-	.strcat
-	.strlen
-	INC	R0		; Count '\0'
-	MOV	R0, -(R1)	; $CLLEN = strlen($CLBUF)
-	PUSH	$EXIT		;  CLR R0; .EXIT  -- Transfer control to LINK
+	PUSH	#$EXIT		;  CLR R0; .EXIT  -- Transfer control to LINK
 RESV10::MOV	$PINVO, 10
 	RETURN
 
 
 .RDATA
 
-CLIB:	.ASCIZ	",CRT0,C.LIB"
-
-.PSECT	.data
-
-
-OBJFN1:	.BYTE	C.SP
-OBJFN:	.BLKB	15
-
-;; Link command line
-SLINK:	.ASCIZ	"LINK/EXE:"
-SLINKE:	.BLKB	30.		;!!!O
 
 
 .END

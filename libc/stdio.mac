@@ -24,7 +24,7 @@ struct _FILE {
 
 &
 
-.PSECT	.text
+.TEXT
 ;.ASECT
 ;. = 20000
 
@@ -59,7 +59,7 @@ fputs::
 ;; int putchar(int ch)
 putchar::
 	MOV	(PC)+, R2
-stdout::.WORD	 STDSTM		;SELF-MOD
+stdout::.WORD	 $DFSTM		;SELF-MOD
 			; Fallthrough
 ;; int fputc(int ch, FILE* stream)
 fputc::
@@ -194,7 +194,7 @@ RETR1A:	BR	RET.R1
 ;; int getchar(void)
 getchar::
 	MOV	(PC)+, R1
-stdin::	.WORD	 STDSTM		;SELF-MOD
+stdin::	.WORD	 $DFSTM		;SELF-MOD
 			; Fallthrough
 fgetc::
 	MOV	#F.UNG1, R4
@@ -232,7 +232,7 @@ fclose::
 	BR	3$
 2$:	CALL	fflush
 	.CLOSE	R4
-3$:	REMO.W	STMS
+3$:	REMO.W	$STMS
 FRE:	.free
 $IOOK:	CLR	R0
 CRET.D:	RETURN
@@ -271,7 +271,7 @@ FOPEN6:	MOV	R0, R3
 	MOV	R3, 6.(R4)	; length
 	MOV	R2, 8.(R4)	; length
 	MOV	R4, R1		; R1: FILE*
-	PUSH.W	STMS
+	PUSH.W	$STMS
 	BR	RETR1A
 
 ;; FILE* fopen(const char* filename, const char* mode);
@@ -325,8 +325,8 @@ LOOERR:	.BYTE	EBADF, ENOENT, EBUSY, EEXIST, EFAULT, EINVAL, ENODEV
 
 .PSECT	.bss
 
-STDSTM::.WORD	0, 0, 0, 0	; FILE
-STMS::	.WORD	0, 0		; Open streams
+$DFSTM::.WORD	0, 0, 0, 0	; FILE. Default Stream
+$STMS::	.WORD	0, 0		; Open streams
 $AREA:	.BLKW	4
 DEFEXT:	.WORD	0, 0, 0, 0
 

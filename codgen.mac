@@ -20,7 +20,7 @@
 
 .GLOBL	RCH, ESTMT, CURTYP, DCLTOR, TYPEDEF, EMSTR, BNDARG, REBIN8, IS.INV
 
-.PSECT	.text
+.TEXT
 
 ;; Allocate next Internal Label
 NXILAB:	DEC	ILAB

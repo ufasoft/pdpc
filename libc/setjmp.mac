@@ -16,7 +16,7 @@
 
 .GLOBL	$INVOR
 
-.PSECT	.text
+.TEXT
 
 ;; int setjmp(jmp_buf env)
 setjmp::

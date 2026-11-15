@@ -7,7 +7,7 @@
 
 .SBTTL	Lexical Parser
 
-.GLOBL	MEMSTM, TMP2RA, VAARGS, CURARG, NSLINE, NX.TOK, TOKVA0, TOKVA1, INTOK
+.GLOBL	MEMSTM, TMP2RA, VAARGS, CURARG, NSLINE, NX.TOK, TOKVA0, TOKVA1, INTOK, RCH
 
 .INCLUDE /ccmacr.inc/
 
@@ -56,15 +56,6 @@ PACHR2:	CMPB	R1, #'\
 PAOCT:	MOV	#8., R3
 	BR	PAINT
 
-;; Read char into R1.
-;; OUTPUT: CF=0 on EOF. Set ZF=0 if isspace()
-RCH::	R.CHR
-	BEQ	8$
-	.isspace
-	SEC
-	RETURN
-8$:	CLC
-	RETURN
 
 
 PANUM:	CLR	R2		; Is Float flag

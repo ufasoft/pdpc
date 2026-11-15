@@ -310,9 +310,9 @@ IF1:	PUSH	#IF2
 
 ;!!!?	CLRB	IS.PP
 
-	CLC
-	BNE	RET.B
-	BR	SEC.RE		; SEC; RETURN
+	BEQ	SEC.RE		; SEC; RETURN
+CLC.RE:	CLC
+	RETURN
 
 
 CHR.R::	PUSH	#RE
@@ -385,14 +385,31 @@ FISYM1::MOV	#$SCRAT, R2
 	.strcmp
 	BNE	1$
 SEC.RE:	SEC
-RET.B:	RETURN
-CLC.RE:	CLC
 	RETURN
 
 
+;; Read char into R1.
+;; OUTPUT: CF=0 on EOF. Set ZF=0 if isspace()
+RCH::	R.CHR
+	BEQ	CLC.RE
+	.isspace
+	BR	SEC.RE
 
 
-
+;; Type of Expression in parenthesis
+;; OUTPUT:
+;;   CF=0 - Expression. The type is in EXTYPE. R2: TEXT offset of the beginning of the expression code
+;;   CF=1 - R1: Type
+TYOREX::.TYPEP
+	BCS	5$
+	MOV	TEXT+2, R2
+	.PEXPP			; CF: 0
+	RETURN
+5$:	MOV	R1, R3
+	T.DCL
+	CK.TOK	T.RPAR
+	MOV	R2, R1
+	BR	SEC.RE
 
 
 ;; R1: filename

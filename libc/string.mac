@@ -7,9 +7,7 @@
 
 .INCLUDE /macros.inc/
 
-.PSECT	.text
-;.ASECT
-;. = 23000
+.TEXT
 
 ;; size_t strlen(const char* str);
 strlen::

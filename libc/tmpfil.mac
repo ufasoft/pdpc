@@ -11,7 +11,7 @@
 .INCLUDE /macros.inc/
 
 
-.PSECT	.text
+.TEXT
 
 ;; char* tmpnam(char* filename)
 tmpnam::
