@@ -392,15 +392,15 @@ ECOMPI:
 	MOV	OBJSTM, R1
 	.fclose			;!!!O use exit()'s featurn of file closing
 
+	CLR	R0
 	MOV	(PC)+, R2
-LNKCMD:	.WORD	1		;SELF-MOD	Link command
-	BNE	1$
-	JMP	exit		; exit(0)
-1$:	MOV	#$CLBUF, R1
+LNKCMD:	.WORD	0		;SELF-MOD	Link command
+	BEQ	RET.E		; `return 0` from main() calls `exit(0)`
+	MOV	#$CLBUF, R1
 	.strcpy
 	PUSH	#$EXIT		;  CLR R0; .EXIT  -- Transfer control to LINK
 RESV10::MOV	$PINVO, 10
-	RETURN
+RET.E:	RETURN
 
 
 .RDATA
