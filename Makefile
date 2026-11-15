@@ -18,11 +18,9 @@ CC.OBJ : cc.mac crt0.mac macros.inc ccmacr.inc CC.MLB
 crt0.OBJ : crt0.mac thunk.mac macros.inc ccmacr.inc CC.MLB
 	$(MACRO11) /LIST:crt0.lst crt0.mac+cc.mlb/LIB
 
-
-
 libc/C.LIB :
 	REM cd libc
 	REM make
 
 clean:
-	-rm *.LIB *.LST *.MAP *.OBJ *.SAV
+	-rm *.LIB *.LST *.MAP *.MLB *.OBJ *.SAV
