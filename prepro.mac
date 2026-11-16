@@ -415,38 +415,20 @@ TYOREX::.TYPEP
 ;; R1: filename
 OPNINP::MOV	#RMODE, R2
 	.fopen
-	BEQ	RET.A
+	BEQ	RET.C
 	PUSH	R0
 	.CALLOC	8.
 	MOV	R0, R4
 	MOV	(PC)+, (R4)+	; next
 CURINP::.WORD	0		;SELF-MOD InputFile
 	MOV	R0, CURINP
-	POP	(R4)+	; file
+	POP	(R4)+		; file
 	MOV	R1, (R4)+	; name
 	INC	(R4)		; lin = 1
-RET.A:	RETURN
-
-
-
-;; INPUT: ASCII: read symbol, R4: param list
-;; Returns: R1, R3: expansion of the arg or 0
-EXPARG:	CLR	R3
-	MOV	BINDS, R5
-	BEQ	8$
-	MOV	R4, R1
-	MOV	ASCII, R2
-1$:	MOVB	(R1), R3
-	BEQ	8$		; End of param list
-	MOV	(R5)+, R3
-	ADD	#6, R3
-	.strcmp
-	BEQ	8$
-2$:	TSTB	(R1)+		; Skip arg name
-	BNE	2$
-	BR	1$
-8$:	MOV	R3, R1
 RET.C:	RETURN
+
+
+
 
 
 ;;!!!TODO: incline in TRYEXP
@@ -755,6 +737,24 @@ IS.INV::.WORD	0			; Function argument parsing mode
 	.free			; free(InputFile)
 6$:	MOV	R4, R1		; R1: '\n'
 9$:	RETURN
+
+;; INPUT: ASCII: read symbol, R4: param list
+;; Returns: R1, R3: expansion of the arg or 0
+EXPARG:	CLR	R3
+	MOV	BINDS, R5
+	BEQ	RET.R3
+	MOV	R4, R1
+	MOV	ASCII, R2
+1$:	MOVB	(R1), R3
+	BEQ	RET.R3		; End of param list
+	MOV	(R5)+, R3
+	ADD	#6, R3
+	.strcmp
+	BEQ	RET.R3		; MOV R3, R1; RETURN
+2$:	TSTB	(R1)+		; Skip arg name
+	BNE	2$
+	BR	1$
+
 
 NEXTC1:	MOV	(R4), MEMSTM	; next MemStream
 ;!!!R	TSTB	(PC)+
