@@ -177,8 +177,8 @@ TRPERR:	MOV	#$STACK-200, SP		; Don't touch command line arguments
 	CMP	-(R3), -(R3)		; R3: 6
 
 	ADD	R5, R3
-	MOV	(R3), R5
-	MOV	-(R3), R4
+	MOV	(R3), R5		; InputFile.line
+	MOV	-(R3), R4		; InputFile.name
 	MOV	R1, R3
 	MOV	#MSGAT, R2
 	MOV	stderr, R1
@@ -203,10 +203,13 @@ TRP300:	MOV	SUBRS-<OP.TRAP+300>(R0), SUBRA+2
 
 .IF NE C$CC
 
+CH.IF2:	BEQ	CHIF1		; not Space
 CH.IF:	CALL	RCH
-	BCC	SKI4
-	BNE	CH.IF		; is Space
-	BR	CHIF1
+	BCS	CH.IF2
+SKI4:	TST	(R4)+		; CF: 0
+RE4R0:	MOV	R0, R1
+	BR	RE4
+
 
 BZ.PU:	CLR	R1
 ;; R1: byte value to push into array R4
@@ -224,11 +227,6 @@ CAT.TY:	CMP	(R0)+, (R0)+	; R0: #TC.SCA
 1$:	MOV	R0, (SP)	; Scalar
 	BR	RE
 
-GSD.:	CMP	(R0)+, (R0)+	; R0: 4
-1$:	MOV	(R4)+, R1
-	PUSH.W	GSD
-	SOB	R0, 1$
-	BR	RE4
 
 .ENDC	; C$CC
 
@@ -286,9 +284,6 @@ TOK.IF:	MOV	R1, R0
 	JSR	R3, RDCASE
 	UN.TOK
 	BR	RE4R0
-SKI4:	TST	(R4)+		; CF: 0
-RE4R0:	MOV	R0, R1
-	BR	RE4
 
 
 
@@ -325,13 +320,6 @@ PSUBRR:	POP	R1		; Keeps CF
 SUBR.R:	MOV	R0, R0.OFF(SP)	; R0 determines Flags
 RE.B:	BR	RE
 
-;; .CALLOC sz
-CALLS.:	PUSH	R1
-	MOV	(R4)+, R1
-	MOV	R4, PC.OFF+2(SP)	; R0 determines Flags
-	.malloc
-	BNE	PSUBRR
-	BR	EOOM
 CALLO.:	.malloc
 CALLO1:	BNE	SUBR.R
 EOOM:
@@ -512,10 +500,6 @@ SYM.PP:	INCB	NO.EXP
 
 
 
-INS.LS:	MOV	@(R4), (R1)
-	MOV	R1, @(R4)+
-	BR	RE4.C
-
 DEL.LS:	MOV	(R4)+, R2
 1$:	MOV	R2, R0
 	MOV	(R0), R2
@@ -557,8 +541,7 @@ OFF.EM:	MOV	TEXT, R3
 RE.E:	BR	RE.C
 
 ALG.SZ:	SZ.TYP
-	INC	R1
-	BIC	#1, R1
+	EVN.UP
 	ADD	R1, (SP)		; Add to Caller's R2
 	BR	RE.E
 
@@ -626,7 +609,6 @@ FLD.T:	MOV	R1, R5		; R5: Symbol
 	ADD	R1, R0
 	BR	1$
 
-
 BLK.OU:	TST	OULEN
 	BEQ	1$
 	OU.FIN
@@ -637,6 +619,8 @@ BLK.OU:	TST	OULEN
 	MOV	(R4)+, R3
 	OU.W
 RE4.F:	BR	RE4.E
+
+
 
 UNSIGN:	INC	R0
 SIGNED:	INC	R0
@@ -696,9 +680,10 @@ TYPP2.:	CLR	R5
 	BIS	#1, R5		; signed type
 20$:	BIC	R0, R5		; clears lower bit on unsigned type
 18$:	MOV	R5, R0
-	SEC
+	SEC       	;!!!O May be call SEC; BR RE4 ?
 RET.R0:	MOV	R0, R1
 	BR	RE.F
+
 
 FI.LOC:	MOV	R1, R4
 	MOV	#LOCALS+2, R2
@@ -732,14 +717,19 @@ OF.LOC:	MOV	R1, R4
 	BR	1$
 
 
-
-SHRIN.:	MOV	(R4)+, R5
-	MOV	(R5)+, R1
-	MOV	(R5)+, R2
-	.REALLOC
+VEC.RE:	MOV	(R4)+, R5
+	MOV	(R5), R1
+	.free
+	MOV	SP, R1
+	ADD	#14, R1
+	MOV	R1, R2
+	MOV	(R1)+, (R5)+
+	MOV	(R1)+, (R5)+
+	MOV	#6, R0
+1$:	MOV	-(R2), -(R1)
+	SOB	R0, 1$
+	MOV	R1, SP
 RE4.G:	BR	RE4.F
-
-
 
 
 FIN.OU:	MOV	OBJSTM, R1
@@ -797,6 +787,7 @@ RVAL.C:	EXTY.P
 2$:	.EMI	I$RD
 RETR0B:	BR	RETR0A
 
+
 PEXPR1:	EM.POP
 PEXPR.:	.EXPR
 ;	C.RVAL
@@ -833,20 +824,6 @@ BNE.EM:	.EMI	$BNE
 	BR	RETOFF
 
 
-VEC.RE:	MOV	(R4)+, R5
-	MOV	(R5), R1
-	.free
-	MOV	SP, R1
-	ADD	#14, R1
-	MOV	R1, R2
-	MOV	(R1)+, (R5)+
-	MOV	(R1)+, (R5)+
-	MOV	#6, R0
-1$:	MOV	-(R2), -(R1)
-	SOB	R0, 1$
-	MOV	R1, SP
-RE4.H:	BR	RE4.G
-
 
 BEQ.EM:	.EMI	$BEQ
 RETOFF:	MOV	TEXT+2, R1
@@ -872,6 +849,19 @@ ENTYPE:	MOV	#TY.I, R1
 R.SEC:	SEC			;!!!O
 	BR	RE.H
 
+ITER.:	MOV	(R4)+, R5	; callback
+	MOV	(R4)+, R2	; terminator
+1$:	G.TOK
+	CMPB	R1, R2		;!!!O use IF.TOK with reference forward to keep the High bit == zero
+	BEQ	RE4.G		; TSR (R4)+, MOV R0, R1, BR RE4
+	UN.TOK
+	MOV	R5, 2$+2
+2$:	.SUBRC	0
+	IF.TOK	T.COMM, 1$
+	MOVB	R2, 3$
+3$:	CK.TOK	0
+RE4.H:	BR	RE4.G
+
 ;; enum, struct, union
 STRU:	MOV	R1, R0		; R3: token (T.ENUM, T.STRU or T.UNIO)
 	IF.TOK	T.SYM, 1$
@@ -888,7 +878,6 @@ ERR.H:	.ERR	16.	; No name or definition
 
 
 
-
 POP.EM:	PO.EXT
 	BEQ	RE.H
 	SZ.TYP
@@ -900,10 +889,13 @@ POPEM1:	.EMI	I$POP
 RE.I:	BR	RE.H
 
 
+
+
 LCHR.R:	R.CHR
 	CMPB	R1, #C.NL
 	BNE	TSTRE
 	BR	RETR0B		; MOV R0, R1; BR RE
+
 
 
 ;; Define enum, struct, union
@@ -937,19 +929,6 @@ DSTRU:	CMP	R0, #T.ENUM
 	POP	R1
 RSEC.A:	BR	R.SEC
 
-
-ITER.:	MOV	(R4)+, R5	; callback
-	MOV	(R4)+, R2	; terminator
-1$:	G.TOK
-	CMPB	R1, R2		;!!!O use IF.TOK with reference forward to keep the High bit == zero
-	BEQ	RE4.J		; TSR (R4)+, MOV R0, R1, BR RE4
-	UN.TOK
-	MOV	R5, 2$+2
-2$:	.SUBRC	0
-	IF.TOK	T.COMM, 1$
-	MOVB	R2, 3$
-3$:	CK.TOK	0
-RE4.J:	BR	RE4.H
 
 
 
@@ -1005,7 +984,7 @@ UNWTO.:	LOC.OF
 	BEQ	RE.I
 	.EMI	AD$SP
 EMIT.R:	.EMIT
-	BR	RE4.J
+RE4.J:	BR	RE4.H
 
 
 NEXTC.:	CALL	NEXTCH
@@ -1033,8 +1012,7 @@ OF.PTR:	MOV	#TYPES, R2
 	MOV	R1, R2
 	MOV	#TC.PTR*400+2, R1
 	PUSH.D	TYPES
-6$:	PUSH	R3
-	POP	R1
+6$:	MOV	R3, R1
 	BR	RE.J
 
 
@@ -1063,6 +1041,12 @@ EMSYM.:	MOV	(R4)+, SYNAM0
 2$:	.EMIT
 RE4.K:	BR	RE4.J
 
+
+GSD.:	CMP	(R0)+, (R0)+	; R0: 4
+1$:	MOV	(R4)+, R1
+	PUSH.W	GSD
+	SOB	R0, 1$
+	BR	RE4.K
 
 
 ;; C.LVAL
@@ -1255,20 +1239,20 @@ A2R50A:	CLR	R5
 
 ;.RADAT		; must be in the same section as code
 
-TRAPS:	.WORD	W.REMO	, W.PUSH	, REALO.	, W.POP		, SUBRC.	, CALLS.					; 100
+TRAPS:	.WORD	W.REMO	, W.PUSH	, REALO.	, W.POP		, SUBRC.							; 100
 .IF NE C$CC
-	.WORD                                                                                            ARR.IS		, TYPP2.	; 106
+	.WORD                                                                          	S.PUSH		, ARR.IS	, TYPP2.	; 105
 	.WORD	CH.IF	, TYI.PU	, EMSYM.	, EXTYP.	, CAST.		, I.CAST	, VEC.RE	, VEC.SV	; 110
 	.WORD	CE.EV	, SYMB.G	, GSD.		, DCL.T		, FLD.T		, TRY2I.	, B.CAST	, P.EXTY	; 120
 	.WORD	CHR.R	, CHR.G		, UNGET.	, CHR.IF	, B.PUSH	, SYM.G		, WS.SK		, D.PUSH	; 130
-	.WORD	WORD.F	, INS.LS	, DEL.LS	, R50.A		, FDWOR.	, CLEAR.	, POP.EM	, JMP.EM	; 140
+	.WORD	WORD.F	, PEXPP.	, DEL.LS	, R50.A		, FDWOR.	, CLEAR.	, POP.EM	, JMP.EM	; 140
 	.WORD	UP.EVN	, OFF.EM	, COF.EM	, PLC.EM	, CIE.EV	, BEXPR.	, PEXPR.	, ITER.		; 150
 	.WORD	TOK.G	, TOK.IF	, TYPED.	, TOK.UN	, TYPEP.	, FIND.		, FIND2.	, SYM.		; 160
 	.WORD	BLK.OU	, W.OU		, FIN.OU	, PTR.IS	, OF.PTR	, TYP.SZ	, RVAL.C	, LVAL.C	; 170
 	.WORD	EMIT.	, ALG.SZ	, EXPR.		, EXT.PO	, UNRV.P	, OF.LOC	, CAT.TY	, UNWTO.	; 200
-	.WORD	STMT.	, BZ.PU		, CALLO.	, UNGE2.	, LCHR.R	, NEXTC.	, TOK.R		, SHRIN.	; 210
+	.WORD	STMT.	, BZ.PU		, CALLO.	, UNGE2.	, LCHR.R	, NEXTC.	, TOK.R		, B.PUSH	; 210
 	.WORD	NEXTB.	, SYM.PP	, EMIR1.	, FI.LOC	, BEQ.EM	, BNE.EM	, EXT.PU	, W.PU2		; 220
-	.WORD	SYMB.	, B.OU		, FUN.IS	, PEXPP.	, B.PUSH	, S.PUSH		 	; 230
+	.WORD	SYMB.	, B.OU		, FUN.IS						 		 	; 230
 																	; 240
 .EVEN
 

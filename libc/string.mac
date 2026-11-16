@@ -155,18 +155,6 @@ memmove::
 9$:	RETURN
 
 
-;; char *strrev(char *str)
-strrev::
-	.strlen
-	MOV	R1, R2
-	ADD	R0, R2		; R2: points behind the end
-	MOV	R1, R0		; Result is `str`
-1$:	CMP	R1, R2
-	BHIS	RET.B
-	MOVB	-(R2), R3
-	MOVB	(R1), (R2)
-	MOVB	R3, (R1)+
-	BR	1$
 
 .RDATA
 

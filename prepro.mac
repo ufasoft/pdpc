@@ -8,8 +8,8 @@
 
 .INCLUDE /ccmacr.inc/
 
-.GLOBL	IS.PP, TEXT, IS.OPE, BNDARG, NARGS, RTOK, NO.EXP, ASCII, BINDS, TMP, MEMSTM, EXPANS, REBIND, CURARG
-.GLOBL	INTOK, ERREXI
+.GLOBL	TEXT, IS.OPE, BNDARG, NARGS, RTOK, ASCII, BINDS, TMP, MEMSTM, EXPANS, REBIND, CURARG
+.GLOBL	INTOK, $PABOR
 .GLOBL	RE
 
 
@@ -88,9 +88,12 @@ DEFINE: MOV	#TMP+2, R3
 	BNE	6$
 	ADD	-(R3), R5	; R5 += TMP: address of arg count
 	MOVB	R4, (R5)	; Save arg count
-	.SHRINK	TMP
+	MOV	TMP, R1
+	MOV	TMP+2, R2
+	.REALLOC
 	CALL	TMP2R1
-	LS.INS	PPCUR
+	MOV	PPCUR, (R1)	; Insert into PPCUR linked list
+	MOV	R1, PPCUR
 	POP	IS.OPE
 	BR	SKRES2
 7$:	MOV	#VAARGS, R1
@@ -132,8 +135,7 @@ $ERROR	= 11
 ;;   R4: #CNDMOD
 PPDIR:: PUSH	(R3)		; PUSH IS.OPE
 	CLR	(R3)		; CLR IS.OPE
-	INCB	IS.PP
-	INCB	NO.EXP
+	ADD	#401, NO.EXP	; ++IS.PP; ++NO.EXP
 	PP.SYM
 	MOV	SYNAM0, R1
 	F.WORD
@@ -168,13 +170,15 @@ PERR:	DEC	ASCII + 2	; Clear terminating '\0'
 	.fputc
 1$:	R.LCHR
 	BNE	1$
-	MOV	#C.NL, R1
-	PUSH.B	ASCII
 	.UNGET
 	PU.BZ	ASCII
 	MOV	ASCII, R1
 	.fputs
+	MOV	#C.NL, R1
+	.fputc
 	.ERR	3
+
+ERREXI::JMP	$PABOR		; To prevent closing .OBJ file. It should be removed
 
 ENDIF:	TST	(R3)		; TST FLSLV. CF=0
 	BEQ	2$		; Active level
@@ -198,8 +202,9 @@ SKREST:	POP	IS.OPE
 SKRES1:	R.LCHR			; Return from a Directive
 	BNE	SKRES1
 SKRES2:	CLR	NSLINE
-	CLRB	NO.EXP
-	CLRB	IS.PP
+	CLR	(PC)+
+NO.EXP::.BYTE	0		; Expansion disabled
+IS.PP::	.BYTE	0		; Preprocessor Mode ON (limited expressions)
 TOKR::	.CLEAR	ASCII
 	MOV	#ASCII+2, R5
 	ASR	(PC)+
@@ -251,7 +256,7 @@ RET.D:	RETURN
 INCLUDE:CLRB	NO.EXP
 	IF.TOK	T.LSTR, 3$
 	CK.TOK	T.LT
-	CLR	TMP + 2
+	CLR	TMP+2
 1$:	R.LCHR
 	BEQ	ERR.O
 	CMPB	R1, #'>
@@ -259,9 +264,8 @@ INCLUDE:CLRB	NO.EXP
 	PUSH.B	TMP
 	BR	1$
 2$:	PU.BZ	TMP
-3$:	CALL	TMP2R1
-	CALL	OPNINP
-	BNE	INCLU9
+3$:	CALL	OPNTMP
+	BNE	8$
 	PUSH	R1
 	MOV	#SYDEV, R1
 	PUSH.S	TMP
@@ -270,12 +274,11 @@ INCLUDE:CLRB	NO.EXP
 	PUSH.S	TMP
 	POP	R1
 	.free
-	CALL	TMP2R1
-	CALL	OPNINP
-	BNE	INCLU9
-	JMP	ERREXI
-INCLU9:	POP	IS.OPE
+	CALL	OPNTMP
+	BEQ	ERREXI
+8$:	POP	IS.OPE
 	BR	SKRES2
+
 
 
 ;; R1[0]:0 #ifndef
@@ -411,13 +414,16 @@ TYOREX::.TYPEP
 	MOV	R2, R1
 	BR	SEC.RE
 
-
+;; Open InputFile with filename in TMP
+OPNTMP:	CALL	TMP2R1
 ;; R1: filename
 OPNINP::MOV	#RMODE, R2
 	.fopen
 	BEQ	RET.C
-	PUSH	R0
-	.CALLOC	8.
+	PUSH	R0, R1
+	MOV	#8., R1
+	.CALLOC
+	POP	R1
 	MOV	R0, R4
 	MOV	(PC)+, (R4)+	; next
 CURINP::.WORD	0		;SELF-MOD InputFile
@@ -426,7 +432,6 @@ CURINP::.WORD	0		;SELF-MOD InputFile
 	MOV	R1, (R4)+	; name
 	INC	(R4)		; lin = 1
 RET.C:	RETURN
-
 
 
 
@@ -490,7 +495,7 @@ EXPAND::
 	;POP	R1
 	;LS.INS	PPCUR
 	POP	CURINP
-	CLR	NO.EXP
+	CLRB	NO.EXP
 ;!!!	DEC	IS.INV
 	DEC	IS.OPE
 
@@ -501,7 +506,7 @@ EXPAND::
 10$:	CMP	R2, (R3)	; CMP R2, BINDS
 	BEQ	RET.C
 	MOV	-(R2), R1
-	.FREE
+	.free
 	BR	10$
 
 
@@ -785,7 +790,7 @@ PDP11:	.WORD	0
 	.ASCIZ	"__pdp11__"<0><-1>"40"
 	.EVEN
 BKC:	.WORD	PDP11
-	.ASCIZ	"_PDPC"<0><-1>"20260"
+	.ASCIZ	"_PDPC"<0><-1>"20263"
 	.EVEN
 DATE:	.WORD	BKC
 	.ASCIZ	"__DATE__"

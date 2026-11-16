@@ -7,7 +7,7 @@
 
 .SBTTL	Lexical Parser
 
-.GLOBL	MEMSTM, TMP2RA, VAARGS, CURARG, NSLINE, NX.TOK, TOKVA0, TOKVA1, INTOK, RCH
+.GLOBL	MEMSTM, TMP2RA, VAARGS, CURARG, NSLINE, NX.TOK, TOKVA0, TOKVA1, INTOK, RCH, NO.EXP
 
 .INCLUDE /ccmacr.inc/
 
@@ -56,7 +56,8 @@ PACHR2:	CMPB	R1, #'\
 PAOCT:	MOV	#8., R3
 	BR	PAINT
 
-
+PAHEX:	ASL	R5		; R5: 16.
+	BR	PANU2
 
 PANUM:	CLR	R2		; Is Float flag
 	MOV	#TOKTYP, R4
@@ -66,13 +67,11 @@ PANUM:	CLR	R2		; Is Float flag
 	BNE	PANU1
 	TST	-(R5)		; R5: 8.
 	R.CHR
-	BEQ	PANU8
-	CMPB	R1, #'X
-	BEQ	16$
-	CMPB	R1, #'x
-	BNE	PANU7
-16$:	ASL	R5		; R5: 16.
-	BR	PANU2
+	switch
+	case	'X	, PAHEX
+	case	'x	, PAHEX
+	default
+	BR	PANU7
 
 PANU3:	CMP	R5, #16.
 	BEQ	PANU1
@@ -81,8 +80,8 @@ PANU3:	CMP	R5, #16.
 PANU4:	INC	R2		; Set Float flag
 PANU1:	MOVB	R1, (R3)+
 PANU2:	R.CHR
-	BEQ	PANU8
 PANU7:	switch
+	case	0	, PANU8
 	case	'.	, PANU4
 	case	'E	, PANU3
 	case	'e	, PANU3
@@ -198,11 +197,6 @@ PAID:	PU.BZ	ASCII
 RTOK9:	MOV	R1, NX.TOK
 	RETURN
 
-RTOK2:
-;	PU.BZ	TMP
-;!!!R	MOV	TMP, $SCRAT
-;	MOV	TMP, TOKVA0	;!!!?
-RET.C:	RETURN
 
 
 
@@ -218,10 +212,9 @@ ERR.D:	.ERR	13.
 
 
 RSYM:	MOVB	R1, (R3)+
-	CMP	R3, #$SCRAT+16
-	BLO	1$			;!!!O
-	DEC	R3
-1$:	R.CHR
+	CMP	#$SCRAT+15, R3
+	SBC	R3		; Prevent writing behind $SCRAT buffer
+	R.CHR
 	.isalnum
 	BNE	RSYM
 	CMPB	R1, #'_
@@ -229,8 +222,7 @@ RSYM:	MOVB	R1, (R3)+
 	CLRB	(R3)+
 	.UNGET
 	A.R50
-	TST	(PC)+
-NO.EXP::.WORD	0		; Expansion disabled
+	TSTB	NO.EXP
 	BNE	RSYM2
 	CALL	TRYEXP
 	BNE	RTOK
@@ -249,9 +241,9 @@ RSYM2:	PUSH	#T.SYM
 PAID.A:	BR	PAID
 
 PSHARP:	IF.CHR	'#, PSHSH
-RTOK2.B:BR	RTOK2
+RTOK2.B:RETURN
 PSHSH:	INC	R1		; R1: T.SHSH
-	BR	RTOK2
+	RETURN
 
 PASTR:	PUSH	R1		; PUSH #T.LSTR
 	CLR	TMP + 2		; Clear previous token

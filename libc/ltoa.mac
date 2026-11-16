@@ -7,7 +7,7 @@
 
 .INCLUDE /macros.inc/
 
-.GLOBL	strrev
+.GLOBL	$EXITH, $POR0
 
 .TEXT
 
@@ -27,10 +27,8 @@ ltoa::
 	ADC	R2
 	NEG	R2
 	MOVB	#'-, (R3)+
-1$:	CALL	ultoa
-	POP	R0
-	RETURN
-
+1$:	PUSH	#$POR0		; POP R0; RETURN
+			; Fallthrough
 ;; char* ultoa(unsigned long val, char* buf, int base)
 ultoa::	PUSH	R3
 	MOV	R4, R0		; R0: base
@@ -43,7 +41,7 @@ ultoa::	PUSH	R3
 3$:	DIV	R0, R4
 	CMP	R5, #10.
 	BLO	4$
-	ADD	#'A-'0-10., R5
+	ADD	#'a-'0-10., R5
 4$:	ADD	#'0, R5
 	MOVB	R5, (R3)+
 	MOV	R4, R1
@@ -53,7 +51,24 @@ ultoa::	PUSH	R3
 	BNE	3$     		; 16-bit dividend, save DIV instruction
 	CLRB	(R3)
 	POP	R1
-	JMP	strrev
+			; Fallthrough
+;; char *strrev(char *str)
+strrev::
+	.strlen
+	MOV	R1, R2
+	ADD	R0, R2		; R2: points behind the end
+	MOV	R1, R0		; Result is `str`
+1$:	CMP	R1, R2
+	BHIS	RET.B
+	MOVB	-(R2), R3
+	MOVB	(R1), (R2)
+	MOVB	R3, (R1)+
+	BR	1$
+
+;; int atexit(void (*func)(void))
+atexit::
+	PUSH.W	$EXITH
+RET.B:	RETURN
 
 
 .END

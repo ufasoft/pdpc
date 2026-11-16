@@ -121,12 +121,5 @@ Exceptions: variable-parameter functions, like `printf()`.
 - C20 - Not supported functionality.
 - C21 - Expression must be L-Value.
 
-## C.LIB - standard C Library
-
-Implemented functions:
-
-`abort`, `abs`, `asctime`, `atexit`, `atof`, `atoi`, `atol`, `brk`, `bsearch`, `calloc`, `clearerr`, `clock`, `ctime`, `div`, `exit`, `fclose`, `feof`, `ferror`, `fflush`, `fgetc`, `fileno`, `fopen`, `fprintf`, `fputc`, `fputs`, `fread`, `free`, `fscanf`, `fseek`, `ftell`, `ftoa`, `fwrite`, `getc`, `gmtime`, `isalnum`, `isalpha`, `isdigit`, `islower`, `isprint`, `isspace`, `isupper`, `isxdigit`, `itoa`, `labs`, `localtime`, `longjmp`, `ltoa`, `malloc`, `memchr`, `memcmp`, `memcpy`, `memmove`, `memset`, `mktime`, `_msize`, `perror`, `puts`, `qsort`, `rand`, `realloc`, `rename`, `rewind`, `sbrk`, `scanf`, `setjmp`, `signal`, `snprintf`, `srand`, `sscanf`, `strcat`, `strchr`, `strcpy`, `strcspn`, `strdup`, `strerror`, `strftime`, `strlen`, `strncat`, `strncmp`, `strpbrk`, `strrchr`, `strrev`, `strspn`, `strstr`, `strtok`, `strtol`, `time`, `tmpfile`, `tmpnam`, `tolower`, `toupper`, `ungetc`, `vfprintf`, `vprintf`, `vsnprintf`.
-
----
 
 © Ufasoft

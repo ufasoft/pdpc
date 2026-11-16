@@ -14,17 +14,12 @@
 .TEXT
 
 
-;; int atexit(void (*func)(void))
-atexit::
-	PUSH.W	EXITH
-	RETURN
-
 
 exit::
 	MOVB	R1, R0
 $EXIT1::
 	MOVB	R0, $USRRB
-1$:	POP.W	EXITH
+1$:	POP.W	$EXITH
 	BCS	4$
 	MOV	R1, 2$ + 2
 2$:	.SUBRC	0			;!!! No atexit() allowed in handlers
@@ -37,7 +32,7 @@ $EXIT1::
 
 $OOM::	CALL	$RNOME		; MOV	#ENOMEM, errno; CLR R0
 	CLR	R1
-	CALL	perror
+$PABOR::CALL	perror
 .ABORT::
 	MOVB	#127., $USRRB
 EXIT9:
@@ -114,19 +109,17 @@ isxdigit::
 ;; int tolower(int c)
 tolower::
 	CALL	isupper
-TOUPP1:	BEQ	R.R1
+TOUPP1:	BEQ	1$		; Return R1
 	MOV	#40, R0
-	XOR	R0, R1
-R.R1:	MOV	R1, R0
+1$:	XOR	R1, R0
 	RETURN
 
 
 ;; int abs(int j)
-abs::
-	SUB	R1, R0
-	BMI	R.R1
-	RETURN
-
+abs::	SUB	R1, R0
+	BPL	RET.D
+	MOV	R1, R0
+	RETURn
 
 ;; long labs(long j)
 labs::
@@ -238,7 +231,7 @@ R50TAB:	.BYTE	'$ - '0, '. - '0, '% - '0
 .PSECT .bss
 
 ;; Handlers set by atexit()
-EXITH:	.WORD	0, 0
+$EXITH::.WORD	0, 0
 
 
 

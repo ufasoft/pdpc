@@ -3,11 +3,11 @@ MACRO11=$(RT) MACRO
 
 OBJS=CC.OBJ lexer.OBJ parser.OBJ prepro.OBJ trap.OBJ codgen.OBJ
 
-CC.MLB : cc.cfg
-	RT11 LIBRARY/MACRO/CREATE cc cc.cfg
-
 CC.SAV: $(OBJS) libc\C.LIB
 	pclink11 -MAP -EXECUTE:$@ $(OBJS) libc\C.LIB
+
+CC.MLB : cc.cfg
+	RT11 LIBRARY/MACRO/CREATE cc cc.cfg
 
 %.OBJ : %.mac macros.inc debug.inc ccmacr.inc CC.MLB
 	$(MACRO11) /LIST:$(basename $<).lst $<+cc.mlb/LIB

@@ -66,7 +66,7 @@
 
 ;; .PEXPR; CK.TOK T.RPAR
 .MACRO	.PEXPP
-	TRAP	^o233
+	TRAP	^o141
 .ENDM	.PEXPP
 
 ;; Call `cb` for every parsed argument separated by comma until `term` terminator
@@ -258,12 +258,6 @@
 	TRAP	^o216
 .ENDM	R.TOK
 
-;; Shrinks vector capacity to actual size
-.MACRO	.SHRINK	vec
-	TRAP	^o217
-	.WORD	vec
-.ENDM	.SHRINK
-
 ;; Save vec and initialize it by Zero
 ;; Effectively: PUSH vec+2, vec
 .MACRO	SV.VEC	vec
@@ -323,12 +317,6 @@
 	TRAP	^o140
 .ENDM	F.WORD
 
-
-;; Insert R1 entry into list
-.MACRO	LS.INS	list
-	TRAP	^o141
-	.WORD	list
-.ENDM	LS.INS
 
 ;; Remove R1 entry from list
 .MACRO	LS.DEL	list
@@ -517,7 +505,7 @@
 ;; Add R1 byte into dynamic vector ar
 ;; Returns: R1 unmodified, ZF=1 if R1==0
 .MACRO	PUSH.B	vec
-	TRAP	^o234
+	TRAP	^o217
 	.WORD	vec
 .ENDM	PUSH.B
 
@@ -530,7 +518,7 @@
 ;; Add ASCIZ string dynamic vector ar. Adds also terminating NUL
 ;; R1: pointer to ASCIZ string
 .MACRO	PUSH.S	vec
-	TRAP	^o235
+	TRAP	^o105
 	.WORD	vec
 .ENDM	PUSH.S
 

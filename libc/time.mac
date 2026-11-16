@@ -7,9 +7,9 @@
 
 .INCLUDE /macros.inc/
 
-.GLOBL	R50TOA
+.GLOBL	$R50A
 
-.PSECT	.text
+.TEXT
 
 
 ;; clock_t clock(void)
@@ -344,7 +344,7 @@ PRAD50:	TST	(SP)+
 	ASL	R0
 	ADD	R0, R5
 	MOV	(R5), R1
-	JSR	R5, R50TOA
+	JSR	R5, $R50A
 	BISB	#40, -(R4)	; Convert two last chars to lowercase
 	BISB	#40, -(R4)
 	CMPB	(R4)+, (R4)+	; R4 += 2
@@ -360,14 +360,15 @@ ctime::
 ;; char* asctime(const struct tm* time_ptr)
 asctime::
 	MOV	R1, R4
+	MOV	#26., R2	; R2: sizeof(result buufer)
 	MOV	(PC)+, R1
 ASCBUF:	.WORD	0
 	BNE	1$
-	.CALLOC	26.
+	MOV	R2, R1
+	.CALLOC
 	MOV	R0, ASCBUF
 	MOV	R0, R1
-1$:	MOV	#26., R2
-	MOV	#FMTASC, R3
+1$:	MOV	#FMTASC, R3
 	.SUBRC	strftime
 	MOV	R1, R0
 	RETURN

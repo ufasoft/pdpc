@@ -21,9 +21,9 @@
 
 ;; Standard C symbols
 .GLOBL	atexit, atof, atoi, atol, calloc, errno, exit, fclose, fopen, fgetc, fprintf, fputc, fputs, free, fseek, gmtime
-.GLOBL	isalnum, isdigit, isspace, itoa, ldiv, ltoa
+.GLOBL	isalnum, isdigit, isspace, isxdigit, itoa, ldiv, ltoa
 .GLOBL	perror, putchar, puts, realloc, stdout, stdin, stderr
-.GLOBL	snprintf, strlen, strcpy, strchr, strerror, strftime, strtol, isxdigit, time, toupper
+.GLOBL	snprintf, strlen, strcpy, strchr, strerror, strftime, strrev, strtol, time, toupper
 
 ;; libc extension symbols
 .GLOBL	ftoa, .msize, ultoa
@@ -71,13 +71,8 @@ $DEVBL	= $SCRAT
 	.PSECT	.radat, D, RO
 .ENDM	.RADAT
 
-.MACRO	.CALLOC	sz
-	.IF NB sz
-		TRAP	^o105
-		.WORD	sz
-	.IFF
-		TRAP	^o212
-	.ENDC
+.MACRO	.CALLOC
+	TRAP	^o212
 .ENDM	.CALLOC
 
 
