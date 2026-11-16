@@ -34,6 +34,15 @@ ST.OFF	= 14	; First Word Before Stack Frame ;   Number Of Saved Bytes In Stack F
 .GLOBL	EXPR., RCH, CHR.R, RESV10
 
 
+VEC.SV:	MOV	(R4)+, R2
+	MOV	R4, R5.OFF(SP)
+	MOV	(R2), R0.OFF(SP)
+	CLR	(R2)+
+	MOV	(R2), PC.OFF(SP)
+	CLR	(R2)
+	POP	R2, R3, R4
+	RETURN
+
 ;; Invalid opcode ISR (vector 10)
 I.INVO::PUSH	R1
 	MOV	2(SP), R1
@@ -237,7 +246,7 @@ RE::	MFPS	R3
 	MOV	R3, R0.OFF(SP)
 	POP	R2, R3, R4, R5
 	MTPS	(SP)+
-	RETURN
+RET.C:	RETURN
 
 ;; Read value, label offset pair
 ;; Jumps ro label if low 7 bits of the value == R1
@@ -255,6 +264,21 @@ ADR2R4:	ADD	R2, R4
 
 .IF NE C$CC
 
+
+B.OU:	PUSH	#RE
+	BR	OUBYTE
+W.OU:	PUSH	#RE
+OUWORD:	CALL	(PC)
+OUBYTE:	INC	OULEN
+	CLR	R1
+	BISB	R3, R1
+	SWAB	R3
+	ADD	R1, OUCSUM
+	MOV	(PC)+, R2
+OBJSTM::.WORD	0
+	.fputc
+	BPL	RET.C
+	.ERR	10.
 
 TOK.IF:	MOV	R1, R0
 	R.TOK
@@ -406,7 +430,7 @@ FIND.:	CMP	(R0)+, (R0)+	; step: 4
 S.PUSH:	MOV	(R4)+, 2$+2
 	MOV	R1, R2
 1$:	MOVB	(R2)+, R1
-2$:	PUSH.B	0		;SELF-MOD
+2$:	PUSH.B	0	;SELF-MOD
 	BNE	1$
 	BR	RE4.B
 
@@ -639,9 +663,8 @@ TYPP2.:	CLR	R5
 	case	T.UNIO	, STRU
 	default
 23$:	UN.TOK
-	TST	R0
+	TST	R0			; CF = 0
 	BNE	2$			; `signed` or `unsigned`
-	CLC
 	BR	RET.R0
 
 ;; symbol
@@ -709,20 +732,6 @@ OF.LOC:	MOV	R1, R4
 	BR	1$
 
 
-B.OU:	PUSH	#RE
-	BR	OUBYTE
-W.OU:	PUSH	#RE
-OUWORD:	CALL	(PC)
-OUBYTE:	INC	OULEN
-	CLR	R1
-	BISB	R3, R1
-	SWAB	R3
-	ADD	R1, OUCSUM
-	MOV	(PC)+, R2
-OBJSTM::.WORD	0
-	.fputc
-	BPL	RET.C
-	.ERR	10.
 
 SHRIN.:	MOV	(R4)+, R5
 	MOV	(R5)+, R1
@@ -730,15 +739,6 @@ SHRIN.:	MOV	(R4)+, R5
 	.REALLOC
 RE4.G:	BR	RE4.F
 
-
-VEC.SV:	MOV	(R4)+, R2
-	MOV	R4, R5.OFF(SP)
-	MOV	(R2), R0.OFF(SP)
-	CLR	(R2)+
-	MOV	(R2), PC.OFF(SP)
-	CLR	(R2)
-	POP	R2, R3, R4
-RET.C:	RETURN
 
 
 
@@ -981,7 +981,7 @@ CAST.:	TST	(R0)+		; R0: 2
 	case	TY.UL	, FROMUL
 	case	TY.FLT	, FROMF
 	default
-	IS.PTR
+;	IS.PTR
 	BR	ERR.H		;!!!?
 
 6$:	CMP	R5, #TY.SYM
@@ -1009,7 +1009,7 @@ EMIT.R:	.EMIT
 
 
 NEXTC.:	CALL	NEXTCH
-TSTRE:	TST	R1
+TSTRE:	TST	R1		; CF:0
 RE.J:	BR	RE.I
 
 ;; PTR.OF
@@ -1042,14 +1042,10 @@ ARR.IS:	DEC	R0		; TC.ARR
 PTR.IS:	ADD	#TC.PTR, R0
 	TY.CAT
 	CMP	R2, R0
-	BNE	1$
-	MOV	R1, R2
-	ADD	TYPES, R2
-	MOV	2(R2), R1
+	BNE	TSTRE		; for CF=0 effect
+	ADD	TYPES, R1
+	MOV	2(R1), R1
 	BR	RSEC.A
-1$:	CLC
-	BR	RE.J
-
 
 
 EMSYM.:	MOV	(R4)+, SYNAM0
@@ -1138,14 +1134,12 @@ FROMI2:	.EMSYM	<^rI$F>, I$F
 
 
 
-
 STMT.:	PUSH	TDEFS+2, LOCALS+2
 	CALL	STMT
 	MOV	(SP), R1
 	.UNWTO
 	POP	LOCALS+2, TDEFS+2
 	BR	RE.K
-
 
 
 
@@ -1261,7 +1255,7 @@ A2R50A:	CLR	R5
 
 ;.RADAT		; must be in the same section as code
 
-TRAPS:	.WORD	W.REMO	, W.PUSH	, REALO.	, W.POP		, SUBRC.	, CALLS.				; 100
+TRAPS:	.WORD	W.REMO	, W.PUSH	, REALO.	, W.POP		, SUBRC.	, CALLS.					; 100
 .IF NE C$CC
 	.WORD                                                                                            ARR.IS		, TYPP2.	; 106
 	.WORD	CH.IF	, TYI.PU	, EMSYM.	, EXTYP.	, CAST.		, I.CAST	, VEC.RE	, VEC.SV	; 110
@@ -1295,12 +1289,9 @@ SUBRS:	.WORD	strlen		, strcmp	, strcpy	, isspace								; 300
 TYSZ:	.BYTE	2, 2, 2, 1, 2, 4, 4	; sizeof(sym, , unk, char, int, long, float)
 .IIF NE C$DBL	.BYTE 8.
 
-
-.RDATA
-
 MSGAT:	.ASCIZ	"Error C%d at %s:%d"<C.NL>
 
-.ENDC
+.ENDC	; C$CC
 
 .RDATA
 

@@ -1,12 +1,15 @@
+// Tests are copied from https://github.com/c-testsuite/c-testsuite
+
+
 typedef int (*PFN)();
 
 
-int Tst000() {
+int T000() {
 	return 2 + 2 == 4;
 }
 
 
-int Tst013() {
+int T013() {
 	int x;
 	int *p;
 	x = 0;
@@ -14,7 +17,7 @@ int Tst013() {
 	return !p[0];
 }
 
-int Tst017() {
+int T017() {
 	struct { int x; int y; } s;
 
 	s.x = 3;
@@ -24,8 +27,8 @@ int Tst017() {
 
 
 PFN tests[] = {
-	Tst000	, 0	, 0	, 0	, 0	, 0	, 0	, 0	, 0	, 0
-	, 0	, 0	, 0, Tst013	, 0	, 0	, 0	, Tst017
+	T000	, 0	, 0	, 0			, 0	, 0	, 0	, 0			, 0	, 0
+	, 0		, 0	, 0	, T013	, 0	, 0	, 0	, T017
 };
 
 
@@ -35,7 +38,7 @@ int main() {
 	for (i = 0; i != count; ++i) {
 		PFN test = tests[i];
 		if (test && !test()) {
-			printf("Test %03d FAILED!\n", i);
+			printf("Test T%03d FAILED!\n", i);
 			return 1;
 		}
 	}

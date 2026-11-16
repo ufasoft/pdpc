@@ -14,7 +14,7 @@
 ;; void perror(const char *s)
 perror::
 	MOV	(PC)+, R2
-stderr::.WORD	 $DFSTM
+stderr::.WORD	$DFSTM
 	TST	R1
 	BEQ	1$
 	TSTB	(R1)

@@ -31,7 +31,7 @@
 ;; Thunks used in CRT only
 
 
-$INVOK:: MOV	SP, R0
+$INVOK::MOV	SP, R0
 	MOVB	(RT), R1
 	ADD	SP, R1
 	PUSH	(R1)		; C-function address
@@ -204,7 +204,6 @@ D.OFF	SK$ST
 D.OFF	$GOTO
 	ADD	(RT)+, SP
 	BR	TJMP
-
 
 
 

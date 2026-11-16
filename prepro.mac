@@ -749,6 +749,8 @@ IS.INV::.WORD	0			; Function argument parsing mode
 
 8$:	.fclose
 	MOV	(R5), CURINP	; next InputFile
+	MOV	4(R5), R1	; InputFile.name
+	.free
 	MOV	R5, R1
 	.free			; free(InputFile)
 6$:	MOV	R4, R1		; R1: '\n'

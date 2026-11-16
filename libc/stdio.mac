@@ -325,7 +325,7 @@ LOOERR:	.BYTE	EBADF, ENOENT, EBUSY, EEXIST, EFAULT, EINVAL, ENODEV
 
 .PSECT	.bss
 
-$DFSTM::.WORD	0, 0, 0, 0	; FILE. Default Stream
+$DFSTM::.BLKW	6		; FILE. Default Stream
 $STMS::	.WORD	0, 0		; Open streams
 $AREA:	.BLKW	4
 DEFEXT:	.WORD	0, 0, 0, 0

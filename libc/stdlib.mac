@@ -3,12 +3,12 @@
 ;;; SPDX-License-Identifier: MIT
 ;;;
 
-.TITLE	STDLIB functions
+.TITLE	STDLIB
 
 
 .INCLUDE /macros.inc/
 
-.GLOBL	$STMS, RNOMEM
+.GLOBL	$STMS, $RNOME
 
 
 .TEXT
@@ -35,7 +35,7 @@ $EXIT1::
 	BR	EXIT9
 
 
-$OOM::	CALL	RNOMEM		; MOV	#ENOMEM, errno; CLR R0
+$OOM::	CALL	$RNOME		; MOV	#ENOMEM, errno; CLR R0
 	CLR	R1
 	CALL	perror
 .ABORT::
@@ -204,7 +204,7 @@ SIGINT	= 2
 ;; Convert 4 RADIX-50 words
 ;; R4: output buffer
 ;; OUTPUT: R4: after last char
-R50TA4::JSR	R5, (PC)
+$R50A4::JSR	R5, (PC)
 	JSR	R5, (PC)
 	MOV	(R3)+, R1
 ;; INPUT: R1: RADIX-50 value, R4: buffer to save ASCII

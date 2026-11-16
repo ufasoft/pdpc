@@ -7,7 +7,7 @@
 
 .INCLUDE /macros.inc/
 
-.GLOBL
+.GLOBL	$RNOME
 
 .TEXT
 
@@ -19,7 +19,7 @@ brk::
 	SUB	R1, R0
 	BEQ	RET.A
 RESBRK:	.SETTOP	R2		; Restore previous break value
-	CALL	RNOMEM		; MOV	#ENOMEM, errno; CLR R0
+	CALL	$RNOME		; MOV	#ENOMEM, errno; CLR R0
 	DEC	R0		; R0: -1
 RET.A:	RETURN
 
