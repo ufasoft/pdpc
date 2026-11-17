@@ -541,24 +541,23 @@ TRYEXP::CALL	FISYM1		; R2: #$SCRAT
 	MOV	#$SCRAT+16., R1
 	.SUBRC	time
 	.SUBRC	gmtime
-	MOV	R0, R4
-	MOV	R2, R1
-	MOV	#14., R2
+	MOV	#14., R2	; max
 	MOV	#FMTDAT, R3
-	.SUBRC	strftime
-	;POP	R1
-	BR	TRYEX8
+	MOV	R0, R4		; tm*
+	.SUBRC	strftime	; use $SCRAT+16. as buffer because strftime()/printf() corrupts $SCRAT
+	BR	4$
 
 6$:	MOV	6(R5), R1	; __LINE__
 	MOV	#10., R3
 	.SUBRC	itoa
-7$:	MOV	R2, R1
+	MOV	R2, R1
+	BR	TRYEX8
 
 5$:	MOV	R2, R1		; __FILE__
 	MOV	#'", (R1)
 	MOV	4(R5), R2	; InputFile.name
 	.strcat
-	MOV	#DQUOT, R2
+4$:	MOV	#DQUOT, R2
 	.strcat
 TRYEX8:	PUSH	R1
 	.CLEAR	TMP
@@ -790,7 +789,7 @@ PDP11:	.WORD	0
 	.ASCIZ	"__pdp11__"<0><-1>"40"
 	.EVEN
 BKC:	.WORD	PDP11
-	.ASCIZ	"_PDPC"<0><-1>"20263"
+	.ASCIZ	"_PDPC"<0><-1>"20264"
 	.EVEN
 DATE:	.WORD	BKC
 	.ASCIZ	"__DATE__"
@@ -807,7 +806,7 @@ RMODE:	.ASCIZ	"r"
 
 DQUOT:	.ASCIZ	/"/
 
-FMTDAT:	.ASCIZ	/"%b %d %Y"/
+FMTDAT:	.ASCIZ	/"%b %d %Y/
 
 VAARGS::.ASCIZ	"__VA_ARGS__"
 

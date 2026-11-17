@@ -163,11 +163,12 @@ $ITRAP::
 	BHIS	TRP300
 	CMP	R0, #OP.TRAP + 100
 	BHIS	TRP100
-	CMP	R0, #OP.TRAP + 40
+	SUB	#OP.TRAP + 40, R0
 	BHI	SWIT.
 TRPERR:	MOV	#$STACK-200, SP		; Don't touch command line arguments
 	MOV	#STKOVF, R5
 	MOV	#10., R3
+	ADD	#OP.TRAP + 40, R0
 	MOVB	R0, R1			; .ERR processing
 	BEQ	8$			; TRAP 0 (Stack Overflow)
 .IF NE C$CC
@@ -232,15 +233,15 @@ CAT.TY:	CMP	(R0)+, (R0)+	; R0: #TC.SCA
 
 
 ;; switch
+;; R0: count, up to 31.
 SWIT.:	TST	(SP)+		; Skip PSW
-	BIC	#^c37, R0	; R0: count, up to 31.
 1$:	JSR	R3, RDCASE
 	SOB	R0, 1$
 RE4::	MFPS	R3		; To return all flags
 	MOV	R4, PC.OFF(SP)
-	MTPS	R3
+	BR	RE1
 RE::	MFPS	R3
-	MOV	R0.OFF(SP), R0
+RE1:	MOV	R0.OFF(SP), R0
 	MOV	R3, R0.OFF(SP)
 	POP	R2, R3, R4, R5
 	MTPS	(SP)+
