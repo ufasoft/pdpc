@@ -7,9 +7,9 @@
 
 .INCLUDE /macros.inc/
 
-.GLOBL	LABS1
+.GLOBL	$LABS1
 
-.PSECT	.text
+.TEXT
 
 ;; Skip whitespace
 ;; Parse sign
@@ -99,7 +99,18 @@ strtol::
 	DEC	R5
 	MOV	R5, (R4)
 10$:	TST	(SP)+		; sign
-	JMP	LABS1		; Negate long R1:R0 if sign<0; RETURN
+	BR	$LABS1		; Negate long R1:R0 if sign<0; RETURN
+
+;; long labs(long j)
+labs::
+	MOV	R1, R0
+	MOV	R2, R1
+$LABS1::BPL	9$
+	NEG	R1
+	NEG	R0
+	SBC	R1
+9$:	RETURN
+
 
 
 .END

@@ -36,13 +36,23 @@ COPCL:	MOVB	(R5)+, -(R2)
 ;; Entry point _start
 .start::
 
-;	MOV	$USRTO, R0
-;	TST	(R0)+
-;	MOV	R0, $AHEAP
-;	MOV	R0, $EHEAP
-	MOV	#$EHEAP, R0
-	MOV	(R0), -4(R0)	; $AHEAP = $EHEAP
-	CLR	-(R0)		; $FREEL = 0
+;; Init .$bss section
+	MOV	$USRTO, R0
+	MOV	$SZBSS, R5
+	BEQ	2$
+	ADD	R5, R0
+	.SETTOP	R0		; R0: new top address
+	ASR	R5
+	MOV	R0, R1
+1$:	CLR	(R1)
+	TST	-(R1)
+	SOB	R5, 1$
+2$:
+;; Init Heap
+	TST	(R0)+
+	MOV	R0, $AHEAP
+	MOV	R0, $EHEAP
+
 
 	.SERR
 ;; Parse Command Line
@@ -128,17 +138,13 @@ ARGV:	.WORD	ARGV+2
 
 
 
-.TEXT	; because it has to be WORD-aligned
+.PSECT	.bss
 
 
 ;; Order does matter, used in free()
 $AHEAP::.WORD	0	; Start of Heap
-$FREEL::
-	.LIMIT	; Free block list
-$EHEAP == $FREEL + 2
-
-;$FREEL::.WORD	0	; Free block list
-;$EHEAP::.WORD	0	; End of Heap
+$FREEL::.WORD	0	; Free block list
+$EHEAP::.WORD	0	; End of Heap
 
 
 

@@ -25,6 +25,9 @@ $RTSTK == 0		; To define max available Stack
 . = $JSW
 	.WORD	CHNIF$
 
+. = $SZBSS
+	.WORD	EBSS - ABSS		; .bss section size
+
 
 . = $ISTAC
 
@@ -45,10 +48,6 @@ RET.C:	RETURN
 
 
 
-ERREXI::CALL	perror
-	MOV	errno, R1
-	BR	CCEXIT
-	; Unreachable
 
 ;; -E option
 ;; Preprocess only
@@ -130,15 +129,17 @@ PARGV:	MOV	(R4)+, R2
 	MOV	(PC)+, R1
 CURFN:	.WORD	0		;SELF-MOD
 	CALL	OPNINP
-	BEQ	ERREXI
-	TST	(PC)+
+	BNE	1$
+	JMP	ERREXI
+1$:	TST	(PC)+
 PPONL::	.WORD	0		;SELF-MOD	-E Preprocess only
 	BNE	PREPRO
 	MOV	#OBJFN, R1
 	MOV	#WMODE, R2
 	.fopen
-	BEQ	ERREXI
-	MOV	R0, OBJSTM
+	BNE	1$
+	JMP	ERREXI
+1$:	MOV	R0, OBJSTM
 
 	MOV	$DEVBL+2, R1		; Module name
 	MOV	$DEVBL+4, R2
@@ -167,12 +168,11 @@ LINK:	.WORD	1		;SELF-MOD	 0 means -c option (Compile only)
 	MOV	#CLIB, R2
 	.strcat
 	.strlen
-	INC	R0
-	MOV	R0, $CLLEN	; $CLLEN = strlen(#$CLBUF)+1
+	ADD	R0, $CLLEN	; $CLLEN = strlen(#$CLBUF)+1
 8$:	JMP	COMPIL
 
 
-HELP:	.ASCII	"PDP C Compiler 2026.3 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
+HELP:	.ASCII	"PDP C Compiler 2026.4 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
         .ASCII	"Usage: CC [options] file.c"<C.NL>
         .ASCII	"OPTIONS:"<C.NL>
         .ASCII	" -c"<C.HT><C.HT>"Compile, but don't link"<C.NL>
@@ -250,15 +250,21 @@ EXTERN:	INCB	IS.EXT
 STATIC:	INCB	IS.STA
 	BR	PDECL1
 
-
+PDECL2:	MOV	R1, (PC)+
+CURTYP::.WORD	0		;!!!? Type of multiple variables declarations
+	MOV	R1, R3
+	IF.TOK	T.SEMI, PDECLS	; enum/struct definition without vars
+2$:	.SUBRC	GDEF
+	ASRB	IN.DEFN
+	BCS	PDECLS
+	IF.TOK	T.COMM, 2$
 PDECL0:	CK.TOK	T.SEMI		; Check for ';'
 COMPIL:
 ;; Parse top-level decls
 PDECLS::
 	CLR	(PC)+
-IS.STA::.WORD	0		; Static declaration
-	CLRB	(PC)+
-IS.EXT::.WORD	0		; Extern declaration
+IS.STA::.BYTE	0		; Static declaration
+IS.EXT::.BYTE	0		; Extern declaration
 PDECL1:	R.TOK
 	BEQ	ECOMPI
 	CLR	R2
@@ -268,16 +274,9 @@ PDECL1:	R.TOK
 	case	T.STAT	, STATIC
 	default
 	.TYPP2
-	BCC	BCCERR
-	MOV	R1, (PC)+
-CURTYP::.WORD	0		;!!!? Type of multiple variables declarations
-	MOV	R1, R3
-	IF.TOK	T.SEMI, PDECLS	; enum/struct definition without vars
-2$:	.SUBRC	GDEF
-	ASRB	IN.DEFN
-	BCS	PDECLS
-	IF.TOK	T.COMM, 2$
-	BR	PDECL0
+	BCS	PDECL2
+ERR.15:	.ERR	15.
+
 
 ;; Global typedef
 GTYPED:	PUSH	#PDECL0
@@ -285,7 +284,7 @@ GTYPED:	PUSH	#PDECL0
 ;; typedef
 TYPEDEF::
 	.TYPEP
-BCCERR:	BCC	ERR.D
+BCCERR:	BCC	ERR.15
 	MOV	R1, R3
 	INCB	IN.DEFN
 1$:	T.DCL
@@ -295,7 +294,6 @@ BCCERR:	BCC	ERR.D
 IN.DEFN::.WORD	0		; 1: inside defun
 	RETURN
 
-ERR.D:	.ERR
 
 
 ECOMPI:	.GSD	<.rdata>, 5, 260, 0	; Relocatable read-only D-section
@@ -384,13 +382,68 @@ ECOMPI:	.GSD	<.rdata>, 5, 260, 0	; Relocatable read-only D-section
 	OU.FIN
 
 	MOV	OBJSTM, R1
-	.fclose			;!!!O use exit()'s featurn of file closing
+	.fclose			;!!!O use exit()'s feature for file closing
 
 	MOV	LINK, R0
 	BEQ	RET.E		; `return 0` from main() calls `exit(0)`
 	PUSH	#$EXIT		;  CLR R0; .EXIT  -- Transfer control to LINK
 RESV10::MOV	$PINVO, 10
 RET.E:	RETURN
+
+;; Reference all sections to make `.$bss` the last in .SAV
+.PSECT	.data
+.RADAT
+.RDATA
+.PSECT	.bss
+
+
+.PSECT	.$bss	; This section is not included into .SAV. It is initialize by CRT0
+
+ABSS::
+
+
+;; Vectors
+
+;; .OBJ Sections
+TEXT	== ABSS		; ::	.WORD	0, 0		; Code and Data
+RDATA	== TEXT + 4	; ::	.WORD	0, 0		; String literals
+RELOCS	== RDATA + 4	; ::	.WORD	0, 0		; Pairs (offset in .text, offset in SYMBS). For string literals in .rdata `offset`==0
+
+GOTOS	== RELOCS + 4	; ::	.WORD	0, 0
+LABELS	== GOTOS + 4	; ::	.WORD	0, 0
+
+CASES	== LABELS + 4	; ::	.WORD	0, 0
+
+;; List of actual `break;` statements of the current scope
+;BREAKS:	.WORD	0, 0
+
+GSD	== CASES + 4	; ::	.WORD	0, 0
+
+SYMBS	== GSD + 4	; ::	.WORD	0, 0		; 2-WORD RADIX-50 names
+TYPES	== SYMBS + 4	; ::	.WORD	0, 0		; Type descriptors
+VARS	== TYPES + 4	; :: 	.WORD	0, 0		; Triplets (Symbol, Type, Offset in .text)
+
+
+TDEFS	== VARS + 4	; ::	.WORD	0, 0		; typedef definitions, structs, unions
+ENUMS	== TDEFS + 4	; ::	.WORD	0, 0
+
+LOCALS	== ENUMS + 4	; ::	.WORD	0, 0		; (Parameter Symbol, Type) pairs
+EXTYPE	== LOCALS + 4	; ::	.WORD	0, 0		; Stack of current expression type. Empty between Statements
+
+CURARG	== EXTYPE + 4	; ::	.WORD	0, 0
+
+TMP	== CURARG + 4	; ::	.WORD	0, 0
+ASCII	== TMP + 4	; ::	.WORD	0, 0		; ASCII token representation
+EXPANS	== ASCII + 4	; ::	.WORD	0, 0
+
+;;--
+;; Current parameter bindings
+BINDS	== EXPANS + 4	; ::	.WORD	0, 0		; List of MemoryStream pointers
+MEMSTM	== BINDS + 4	; ::	.WORD	0		; Macro-expansion result
+;;--
+
+
+EBSS	= MEMSTM + 2
 
 
 .END

@@ -7,20 +7,36 @@
 
 .INCLUDE /macros.inc/
 
-.PSECT	.text
+.TEXT
+
+;; size_t fwrite(const void* buffer, size_t size, size_t count, FILE* stream)
+fwrite::
+	MUL	R2, R3
+	BEQ	RET.A
+	PUSH	R2
+	MOV	R1, R5
+	MOV	R4, R2
+2$:	CLR	R1
+	BISB	(R5), R1
+	.fputc
+	BMI	8$
+	INC	R5
+	SOB	R3, 2$
+8$:	BR	$RFREA
+
 
 ;; size_t fread(void* buffer, size_t size, size_t count, FILE* stream)
 fread::
 	MUL	R2, R3
 	BEQ	RET.A
-	PUSH	R2		;!!!? Where it is restored?
+	PUSH	R2		;!!!? Where is it restored?
 	MOV	R1, R5
 	MOV	R4, R1
 2$:	.fgetc
-	BMI	R.FREA
+	BMI	$RFREA
 	MOVB	R0, (R5)+
 	SOB	R3, 2$
-R.FREA::SUB	(SP)+, R5
+$RFREA::SUB	(SP)+, R5
 	CLR	R4
 	DIV	(SP)+, R4
 	NEG	R5

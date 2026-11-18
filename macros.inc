@@ -48,7 +48,8 @@ EMFILE	=: 24.
 
 $PINVO	=: ^o120		; Previous Vector 10
 $SCRAT	=: ^o310		; Scratch buffer for temporary values
-$STKLO	=: ^o400
+$STKLO	=: ^o600
+$SZBSS	=: ^o700		; .bss section size
 $ISTAC	=: ^o1000		; Temporary stack, active during initialization
 $START	=: ^o2300		; Startup code, discarded after Runtime initialization
 $STACK	=: ^o3000
@@ -116,8 +117,8 @@ $DEVBL	= $SCRAT
 ;; key: 7-bit value
 ;; lab: -256..255 WORDs distance
 .MACRO	case	key, lab
-	.IIF GT lab - . - 511. 	.ERROR	lab is out of bounds
-	.IIF GT . - lab - 512.	.ERROR	lab is out of bounds
+	.IIF GT lab - . - 2 - 511. 	.ERROR	lab is out of bounds
+	.IIF GT . + 2 - lab - 512.	.ERROR	lab is out of bounds
 	.BYTE	key&^o177!<lab-.-2/4&^o200>, lab-.-1/2&^o377
 .ENDM	case
 

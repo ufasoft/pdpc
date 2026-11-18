@@ -8,7 +8,7 @@
 
 .INCLUDE /macros.inc/
 
-.GLOBL	$STMS, $RNOME
+.GLOBL	$STMS, $RNOME, $LABS1
 
 
 .TEXT
@@ -121,15 +121,6 @@ abs::	SUB	R1, R0
 	MOV	R1, R0
 	RETURn
 
-;; long labs(long j)
-labs::
-	MOV	R1, R0
-	MOV	R2, R1
-$LABS1::BPL	RET.D
-	NEG	R1
-NEGR0R:	NEG	R0
-	SBC	R1
-	RETURN
 
 ;; div_t div(int x, int y)
 div::

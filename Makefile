@@ -1,7 +1,7 @@
 RT=RT11
 MACRO11=$(RT) MACRO
 
-OBJS=CC.OBJ lexer.OBJ parser.OBJ prepro.OBJ trap.OBJ codgen.OBJ
+OBJS=CC.OBJ lexer.OBJ parser.OBJ prepro.OBJ trap.OBJ
 
 CC.SAV: $(OBJS) libc\C.LIB
 	pclink11 -MAP -EXECUTE:$@ $(OBJS) libc\C.LIB

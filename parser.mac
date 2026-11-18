@@ -14,6 +14,19 @@
 .GLOBL	TDEFS, EMADD, TMP2R1, ASMSTM, TMP, EXPANS, LOCFUN, $DRD, GOTOS, LABELS, ARITH, BEGAGG, AGGLV
 .GLOBL	TEXT, RDATA, RELOCS, HAS.TO, TYPES, IN.DEFN
 .GLOBL	EXPR.2, TYOREX, IS.PP
+.GLOBL	RCH, ESTMT, CURTYP, DCLTOR, TYPEDEF, EMSTR, BNDARG, REBIN8, IS.INV
+
+;; 1-byte $BASE-offsets
+.GLOBL	ADD$I, SUB$I, MUL$I, DIV$I, MOD$I, LSH$I, RSH$I, AND$I, OR$I, XOR$I
+.GLOBL	ADD$L, SUB$L, MUL$L, DIV$L, MOD$L, LSH$L, RSH$L, AND$L, OR$L, XOR$L
+.GLOBL	ADD$F, SUB$F, MUL$F, DIV$F
+.GLOBL	EQ$, NE$, LOS$, LO$, HIS$, HI$, LEQ$, LT$, GEQ$, GT$
+
+.GLOBL	T$JMP, T$RET, T$SWIT, AD$SP, SAV$, RST$, CP$ST, Z$ST
+.GLOBL	I$CMP, L$CMP, F$CMP
+.GLOBL	C$WRI, I$WRI, $WRIT, $DRD, $GOTO, I$ADD, I$SUB, I$MUL, I$DIV, I$ASL, I$ASR, PU$16, P$LAD, PU$SP
+
+
 
 .PSECT
 
@@ -245,16 +258,233 @@ DCLTOR::PUSH	R3
 1$:	BR	POPR2R		; POP R2; RETURN
 
 
+;;;===================================
 
-ARROW:	C.RVAL
-	CALL	DEREF1
-DOT:	G.SYMB
-	T.FLD
+;; Allocate next Internal Label
+NXILAB:	DEC	ILAB
+	MOV	(PC)+, R1
+ILAB:	.WORD	0		; Decreasing Internal Label for continue/break labels
+	RETURN
+
+NILAB:	CALL	NXILAB
+NEWLAB:	PUSH	R2
+	MOV	TEXT+2, R2
+	PUSH.D	LABELS
+	CLR	R1
+	LOC.OF
+	PUSH.W	LABELS
+	POP	R2
+	RETURN
+
+
+
+
+
+;; Call it by JSR R5, LOOP
+LOOP:	MOV	CUBRK, (SP)
+	PUSH	CUCONT
+	CALL	NILAB
+	MOV	ILAB, CUCONT
+	CALL	NXILAB
+	MOV	R1, CUBRK
+	JMP	(R5)
+
+
+;; (
+LPAR:	CALL	TYOREX
+	BCC	EUNA.A
+			; Fallthrough
+;; R1: target type
+CAST:	MOV	R1, R5
+	.UNARY
+	MOV	R5, R1
+	.CAST
+	RETURN
+
+
+;; Constant Address expression
+CADDR:	G.SYMB
+CADDR1:	.EMI	PU$16
+	.EMIT
+	.EMI	PU$16
+	.EMIT	0
+	.FIND2	VARS		; R1: type
+	BCC	ERR.C
+	.EMI	PU$16
+	MOV	#TY.SYM, R5
+	BR	EM.RET		; .EMIT; MOV R5, R1; PU.EXT; RETURN
+
+
+
+;; Parse Variable reference in expression
+PAVAR:	.SYMB
+	MOV	R1, CURSYM
+	TST	IS.CE
+	BNE	CADDR1
+;; Search the Symbol in LOCALS
+	MOV	#LOCALS+2, R5
+	MOV	(R5), R4
+	ADD	-(R5), R4	; R5: #LOCALS
+	MOV	R4, R3		; R4, R3: Address behind LOCALS
+5$:	CMP	R4, (R5)	; CMP	R4, LOCALS
+	BLOS	PAVAR7
+1$:	CMP	-(R4), -(R4)
+	CMP	(R4), R1
+	BNE	5$
+	MOV	2(R4), R1
+	IS.FUN
+	BNE	2$
+	MOV	R1, R2		; R2: Type
+	.EMI	PU$16		; Any Function symbol is represented as address
+	CLR	R1
+	BR	PAFUN
+;	IS.ARR
+;	BCC	2$
+;	PTR.OF			; R1: element type*
+;	BR	3$
+2$:	NEG	R1		; L-Value type
+3$:	PU.EXT
+	CMP	(R4)+, (R4)+
+	MOV	R4, R1
+	SUB	LOCALS, R1
+	LOC.OF
+	MOV	R1, R2		; R2: offset to local var/parameter
+	EXTY.P			; Skip top, the type of current expression
+4$:	CMP	R4, EXTYPE
+	BEQ	6$
+	MOV	-(R4), R1
+	SZ.ALG			; R2 += aligned sizeof(subexpression)
+	BR	4$
+6$:	.EMI	P$LAD
+	BR	EMEUR2		; MOV R2, R1; .EMIT; BR EUNA
+
+
+EMSYM:	TSTB	IS.PP
+	BEQ	PAVAR
+	CLR	-(SP)			; All unexpanded symbols have value 0
+	CMP	SYNAM0, #^Rdef		; defined
+	BNE	EMSYM3
+	IF.CHR	'(, DEFARG
+	PP.SYM
+	BR	EMSYM1
+
+
+PAVAR7:	.EMI	PU$16		; Any Global symbol is represented as address or 16-bit enum value
+	.SYM
+	BCC	8$		; No local symbol found
+	DEC	R0
+	BMI	PENUV		; enum value
+8$:	MOV	(PC)+, R1
+IS.CE::	.WORD	0		; Const Expression mode
+	BNE	ERR.C
+PAFUN:	.EMIT			; Address == 0
+	PUSH	R2		; (SP): Type
+	MOV	#4*400+100, R3	; Global Symbol Name
+	CALL	DEFGSD
+	MOV	TEXT+2, R1
+	TST	-(R1)
+	MOV	(PC)+, R2
+CURSYM:	.WORD	0		; Current Symbol
+	PUSH.D	RELOCS
+	CLR	R0		; Is variable-type
+	POP	R1		; R1: Type
+	BEQ	3$		; Not-Defined type
+	IS.FUN
+	BNE	4$
+	INC	R0
+	BR	4$
+3$:	IF.TOK	T.LPAR, 2$
+	.ERR	12.
+2$:	UN.TOK
+	MOV	#TY.UNK, R1	; Assume undeclared identifier is func
+4$:	TST	R0
+	BNE	5$		; Function
+	NEG	R1		; L-Value
+5$:	PU.EXT
+EUNA.A:	BR	EUNA.B
+
+
+
+DEFARG:	PP.SYM
+	CK.TOK	T.RPAR
+EMSYM1:	CALL	FISYM1
+	ADC	(SP)		; (SP): 1 if defined(SYMBOL)
+EMSYM3:	POP	TOKVA0
+			; Fallthrough
+EMINT:	MOV	#TY.I, R5
+	.EMI	PU$16
+EM.SCR:	MOV	(PC)+, R1
+TOKVA0::.WORD
+EM.RET:	.EMIT
+	MOV	R5, R1
+	BR	ADDRO3		; PU.EXT; RETURN
+
+ADDROF:	TSTB	IS.CE
+	BNE	CADDR
+	.UNARY
+	PO.EXT
+	BMI	ADDRO1		; L-Value
+	IS.FUN
+	BEQ	ADDRO2		; was R-Value
+ERR.C:	.ERR	21.
+ADDRO1:	NEG	R1
+ADDRO2:	PTR.OF			; find pointer type
+ADDRO3:	PU.EXT
+RET.F:	RETURN
+
+PENUV:	MOV	R1, R2
+	PU.TYI
+EMEUR2:	MOV	R2, R1
+EMEU:	.EMIT
+EUNA.B:	BR	EUNA.C
+
+
+
+SIZEOF:	MOV	RELOCS+2, R3
+	IF.TOK	T.LPAR, 1$		; (
+	MOV	TEXT+2, R2
+	.UNARY
+	BR	2$
+1$:	CALL	TYOREX
+	BCS	4$
+2$:	MOV	R2, TEXT+2
+	MOV	R3, RELOCS+2
+	PO.EXT
+	BPL	4$
+	NEG	R1
+4$:	SZ.TYP
+	MOV	R1, TOKVA0
+	CALL	EMINT
+EUNA.C:	BR	EUNA
+
+
+DEREF:	P.UNRV
+DEREF1:	C.LVAL
 	EXTY.P
-	NEG	R2
-	MOV	R2, (R4)
-	.EMI	AD$16
-	BR	EMEUNA
+	MOV	R1, (R4)
+	RETURN
+
+BNOT:	ADD	#NOTTAB - T.NOT, R1
+	MOV	R1, R5
+	P.UNRV
+BLNOT1:	PUSH	R1
+	ASR	R1
+	CMP	R1, #TY.L/2
+	BEQ	2$
+	CAST.I
+	INC	R5
+2$:	CALL	EMIOF5
+	POP	R1		; the same type
+	BR	EUNA
+
+
+PNEG:	P.UNRV
+	MOV	#NEGTAB, R5
+	CMP	R1, #TY.FLT
+	BNE	BLNOT1
+	.EMI	F$NEG
+	BR	EUNA.A
+
 
 
 PINDEX:	C.RVAL
@@ -264,19 +494,353 @@ PINDEX:	C.RVAL
 	CALL	EMADD
 	.EXTYP
 	CALL	DEREF1
-EUNAR:	R.TOK
-	BEQ	RET.E
+	BR	EUNA
+
+ARROW:	C.RVAL
+	CALL	DEREF1
+DOT:	G.SYMB
+	T.FLD
+	EXTY.P
+	NEG	R2
+	MOV	R2, (R4)
+	.EMI	AD$16
+	BR	EMEU
+
+
+;; Parge unary argument
+PUNARY::G.TOK
+	MOV	#T.ADD&177, R2		; Used in INCR
+	switch
+	case	T.AST	, DEREF		; *
+	case	T.INCR	, INCR		; ++
+	case	T.DECR	, DECR		; --
+	case	T.LPAR	, LPAR
+	case	T.ADD	, PUNARY	; +
+	case	T.AND	, ADDROF	; &
+.IIF NE C$DBL	case	T.LDBL	, EMDBL
+	case	T.LINT	, EMINT		; int literal
+	case	T.SIZE	, SIZEOF
+	case	T.LSTR	, EMISTR	; string literal
+	case	T.NOT	, BNOT		; ~
+	case	T.SUB	, PNEG		; -
+	case	T.LNOT	, LNOT		; !
+	case	T.LFLT	, EMFLT		; float literal
+	case	T.LLNG	, EMLNG		; long literal
+	case	T.SYM	, EMSYM
+	default
+ERR.F:	.ERR
+
+
+EMFLT:	MOV	#TY.FLT, R5
+	BR	EMLNG1
+
+EMLNG:	MOV	#TY.L, R5
+EMLNG1:	.EMI	PU$32
+EMLNG2:	MOV	(PC)+, R1
+TOKVA1::.WORD	0
+	.EMIT
+	BR	EM.SCR
+
+
+
+DECR:	INC	R2		; R2: T.SUB&177
+INCR:	.UNARY
+INCR1:	CALL	DREAD
+	CALL	POINCA
+	MOV	#T.ASGN&177, R2
+	.EXTYP
+	BR	INCR8
+
+
+
+LNOT:	.UNARY
+	CAST.B
+	.EMI	I$LNO
+EUNA:	R.TOK
+	BEQ	9$
 	MOV	#T.ADD&177, R2		; Used in INCR
 	switch
 	case	T.BRA	, PINDEX ; [
 	case	T.ARRO	, ARROW	; ->
 	case	T.DOT	, DOT	; .
-	case	T.LPAR	, INV	; (
 	case	T.DECR	, PODECR
 	case	T.INCR	, POINCR
+	case	T.LPAR	, INV	; (
 	default
 	UN.TOK
+9$:	RETURN
+
+
+ASGPTR:	CMP	R3, #TY.I
+	BEQ	EMIWRI		; Just for assigning 0 literal
+	MOV	R3, R1
+	IS.PTR
+	BCS	EMIWRI
+	IS.FUN
+	BNE	ERR.F		; Different types
+EMIWRI:	.EMI	I$WRI
+RET.G:	RETURN
+
+PODECR:	INC	R2		; R2: T.SUB&177
+POINCR:	PUSH	R2
+	CALL	INCR1
+	POP	R2
+	MOV	#3, R0
+	XOR	R0, R2		; R2: opposite Operation (T.SUB for ++)
+POINCA:	.EMI	P$ONE
+	PU.TYI
+INCR8:	MOV	R1, R4
+	MOV	R2, R1		; R1: Token
+	BR	ARITH
+
+
+
+COMPAR:	MOVB	R5, R2			; R2: low byte of the Token
+	MOV	#I$CMP, R1
+	MOV	#TH.SBR, R4
+	ASR	R3
+	BCS	2$
+	ADD	#TH.UBR-TH.SBR, R4		; unsigned comparisons
+2$:	CMP	R3, #TY.L/2
+	BLO	6$
+	MOV	#L$CMP, R1
+	CMP	R3, #TY.FLT/2
+	BLO	6$
+	MOV	#F$CMP, R1
+6$:	.EMIT
+	ADD	R2, R4
+	MOVB	-<T.EQ & 377>(R4), R1
+	EXTY.P
+	MOV	#TY.I, (R4)
+	BR	EMIOFF
+
+.IIF NE C$DBL ARTHD: ADD	#TH.D-TH.F, R5
+ARTHF:	ADD	#TH.F-TH.L, R5
+ARTHL:	ADD	#TH.L-TH.I, R5
+ARTHI:	ADD	#TH.I-1, R5
+EMIOF5::MOVB	(R5), R1
+EMIOFF::ASL	R1
+	ADD	#$BASE, R1
+EMRE:	.EMIT
 	RETURN
+
+
+
+
+;;  a op (typeof a)b
+ARITH5:	MOV	R3, R1
+	PU.EXT
+	MOV	(R4), R1
+	.CAST
+	PO.EXT
+	MOV	R1, R3
+	BR	ARITH6
+
+
+
+
+
+;; Pointer arithmetics
+;; R2: token
+;; (R4): left type
+PARITH:	CMPB	R5, #T.GTEQ & ^x0FF
+BLSCMP:	BLOS	COMPAR		; BLOS COMPAR
+	CMP	(R4), R3
+	BLO	1$
+	MOV	(R4), R0	; Swap to keep (R4) to be a pointer type
+	MOV	R3, (R4)
+	MOV	R0, R3
+1$:     MOV	R3, R1
+	PU.EXT
+	CAST.I
+	PO.EXT
+	MOV	(R4), R1
+	IS.PTR
+	BCC	ERR.4
+	SZ.TYP
+	switch
+	case	1	, 3$	; char*
+	case	2	, 4$	; int*
+	default
+	.EMI	PU$16
+	.EMIT
+	.EMI	I$MUL
+	BR	3$
+4$:	.EMI	I$ASL
+3$:	MOV	#I$ADD, R1
+	CMPB	R2, #T.SUB
+	BNE	EMRE
+	TST	-(R1)		; R1: #I$SUB
+EMRE.A:	BR	EMRE
+
+
+
+ASSIGN: MOV	(R4), R1
+	BPL	ERR.4		; Not L-Value
+	NEG	R1
+	MOV	R1, (R4)
+	CMP	R1, R3
+	BEQ	1$
+	IS.PTR
+	BCS	ASGPTR
+	ASR	R1
+;; Cast
+	PUSH	(R4)
+	MOV	R3, R1
+	PU.EXT
+	MOV	(SP), R1
+	.CAST
+	PO.EXT
+	POP	R1
+1$:	SZ.TYP
+	switch
+	case	1, EMCWRI
+	case	2, EMIWRI
+	default
+	.EMI	$WRIT
+EMRE.B:	BR	EMRE.A
+
+EMCWRI:	.EMI	C$WRI		; destination is char or unsigned char
+	RETURN
+
+
+
+
+
+
+NONPTR:	BIC	#177760, R5
+	MOV	R3, R1
+;!!!R	BIC	#177600, R1
+	switch
+	case	TY.I	, ARTHI
+	case	TY.UI	, ARTHI
+	case	TY.L	, ARTHL
+	case	TY.UL	, ARTHL
+	case	TY.FLT	, ARTHF
+.IIF NE C$DBL	case TY.DBL	, ARTHD
+	default
+ERR.4:	.ERR	4
+
+
+
+
+
+EMADD::	.EXTYP
+	MOV	R1, R4
+	MOV	#T.ADD, R1
+			; Fallthrough
+;; Generate code for Binary operators
+;; R4: type
+GENBIN::
+;; Arith
+ARITH::	MOV	R1, R2			; R2: token
+	SUB	#2, EXTYPE+2
+	MOV	R4, R3			; R3: right type
+	EXTY.P
+	MOVB	R1, R5			; R5: operation
+	CMPB	R5, #T.ASGN
+	BEQ	ASSIGN
+	C.RVAL
+
+;; Eliminate char types
+	MOV	(R4), R1
+	.TRY2I
+	MOV	R1, (R4)
+	MOV	R3, R1
+	.TRY2I
+	MOV	R1, R3
+
+	CMP	(R4), R3
+	BEQ	ARITH7			; Same types
+
+;; Try to cast to the same type
+	CMP	R3, #TY.UI
+	BLO	PARITH
+	CMP	(R4), #TY.UI
+	BLO	PARITH
+
+	CMP	(R4), R3
+	BHI	ARITH5
+
+;;  (typeof b)a op b
+	.EMI	SAV$		; Save b
+	MOV	R3, R1
+	SZ.TYP
+	PUSH	R1
+	.EMIT
+	MOV	R3, R1
+	.CAST
+	.EMI	RST$		; Restore b
+	POP	R1
+	.EMIT
+	MOV	R3, R1
+ARITH6:	EXTY.P
+ARITH7:	CMPB	R5, #T.GTEQ & ^x0FF
+	BLOS	BLSCMP		; BLOS COMPAR
+	IS.PTR
+	BCC	NONPTR
+;; Difference of two pointers
+;; Assume they are of the same type
+;; R1: target type of the Pointers
+PTRDIF:	CMPB	R2, #T.SUB
+	BNE	ERR.4
+	.EMI	I$SUB
+	MOV	#TY.I, (R4)
+	SZ.TYP
+	switch
+	case	1	, 1$	; char*
+	case	2	, 2$	; int*
+	default
+	.EMI	PU$16
+	.EMIT
+	.EMI	I$DIV
+1$:	RETURN
+2$:	.EMI	I$ASR
+RET.H:	RETURN
+
+
+
+
+
+EMISTR:	MOV	#TY.C, R1
+	PTR.OF
+	PU.EXT			; `char*` type
+	.EMI	PU$16
+			; Fallthrough
+EMSTR::	MOV	TEXT+2, R1
+	MOV	RDATA+2, R2
+	COM	R2		; Negative means RLD to .rdata
+	PUSH.D	RELOCS
+	.EMIT			; garbage
+EMSTR1:
+2$:	MOV	TMP, R2		; R2: pointer to allocated string
+	MOV	TMP+2, R4	; R4: Size, excluding terminating \0
+	BEQ	3$
+1$:	MOVB	(R2)+, R1
+	PUSH.B	RDATA
+	SOB	R4, 1$
+3$:	IF.TOK	T.LSTR, 2$	; concatenate adjacent strings
+	PU.BZ	RDATA		; Terminating \0
+	RETURN
+
+
+;; Check for Undefined array
+;; Allocate it and define its size
+;; R4: array size
+AUTARR:	MOV	R3, R1		; R1: Array Type
+	ADD	TYPES, R3
+	CMP	(R3)+, (R3)+
+	TST	(R3)
+	BPL	RET.H
+	MOV	R4, (R3)	; Define array size
+	SZ.TYP
+	.EMI	Z$ST		; Allocate space in Stack for local array
+EMRE.C:	BR	EMRE.B
+
+
+
+
+
 INV:	EXTY.P
 	CMP	(R4), #-TY.UNK
 	BNE	4$
@@ -285,10 +849,10 @@ INV:	EXTY.P
 	CLR	R5
 	CMP	R1, #TY.UNK
 	BEQ	INVOKE
-	BHI	ERR.B
+	BHI	ERR.21
 	IS.PTR
 	IS.FUN
-	BNE	ERR.B
+	BNE	ERR.21
 	MOV	#TY.I, (R4)	; Any type with sizeof==2
 	ADD	TYPES, R1
 	MOV	R1, R5
@@ -296,7 +860,7 @@ INV:	EXTY.P
 			; Fallthrough
 ;; Parse function invocation
 ;; R5: Function Type descriptor or 0
-INVOKE:	PUSH	#EUNAR
+INVOKE:	PUSH	#EUNA
 	SV.VEC	BINDS
 	TST	-(SP)		; Space to save MEMSTM later
 	MOV	#TY.I, R1
@@ -339,259 +903,129 @@ INVOKE:	PUSH	#EUNAR
 	POP	R1		; Return type
 	PU.EXT
 ;!!!?	MOVB	(SP)+, IS.ARG
-	DEC	IS.INV
-REBIN8::POP	MEMSTM
+REBIN8::DEC	IS.INV
+	POP	MEMSTM
 REBIND::MFPS	R0
 	RE.VEC	BINDS
 	MTPS	R0
-RET.E:	RETURN
-
-;; (
-LPAR:	CALL	TYOREX
-	BCC	EUNA.A
-			; Fallthrough
-;; R1: target type
-CAST:	MOV	R1, R5
-	.UNARY
-	MOV	R5, R1
-	.CAST
 	RETURN
 
 
-ERR.B:	.ERR
 
 
 
 
-PENUV:	PUSH	R1
-	PU.TYI
-	POP	R1
-EMEUNA:	.EMIT
-EUNA.A:	BR	EUNAR
-
-LNOT:	.UNARY
-	CAST.B
-	.EMI	I$LNO
-	BR	EUNA.A
-
-PNEG:	P.UNRV
-	MOV	#NEGTAB, R5
-	CMP	R1, #TY.FLT
-	BNE	BLNOT1
-	.EMI	F$NEG
-EUNA.B:	BR	EUNA.A
-
-;; Constant Address expression
-CADDR:	G.SYMB
-CADDR1:	.EMI	PU$16
-	.EMIT
-	.EMI	PU$16
-	.EMIT	0
-	.FIND2	VARS		; R1: type
-	BCC	ERR.C
-	.EMI	PU$16
-	MOV	#TY.SYM, R5
-	BR	EM.RET		; .EMIT; MOV R5, R1; PU.EXT; RETURN
 
 
 
-ADDROF:	TSTB	IS.CE
-	BNE	CADDR
-	.UNARY
-	PO.EXT
-	BMI	ADDRO1		; L-Value
-	IS.FUN
-	BEQ	ADDRO2		; was R-Value
-ERR.C:	.ERR	21.
-ADDRO1:	NEG	R1
-ADDRO2:	PTR.OF			; find pointer type
-ADDRO3:	PU.EXT
-RET.B:	RETURN
-
-
-
-
-BNOT:	ADD	#NOTTAB - T.NOT, R1
-	MOV	R1, R5
-	P.UNRV
-BLNOT1:	PUSH	R1
-	ASR	R1
-	CMP	R1, #TY.L/2
-	BEQ	2$
-	CAST.I
-	INC	R5
-2$:	CALL	EMIOF5
-UNAEND:	POP	R1		; the same type
-	BR	EUNA.B
-
-
-;; Parse Variable reference in expression
-PAVAR:	.SYMB
-	MOV	R1, CURSYM
-	TST	IS.CE
-	BNE	CADDR1
-;; Search the Symbol in LOCALS
-	MOV	#LOCALS+2, R5
-	MOV	(R5), R4
-	ADD	-(R5), R4	; R5: #LOCALS
-	MOV	R4, R3		; R4, R3: Address behind LOCALS
-5$:	CMP	R4, (R5)	; CMP	R4, LOCALS
-	BLOS	7$
-1$:	CMP	-(R4), -(R4)
-	CMP	(R4), R1
-	BNE	5$
-	MOV	2(R4), R1
-	IS.FUN
-	BNE	2$
-	MOV	R1, R2		; R2: Type
-	.EMI	PU$16		; Any Function symbol is represented as address
-	CLR	R1
-	BR	PAFUN
-;	IS.ARR
-;	BCC	2$
-;	PTR.OF			; R1: element type*
-;	BR	3$
-2$:	NEG	R1		; L-Value type
-3$:	PU.EXT
-	CMP	(R4)+, (R4)+
-	MOV	R4, R1
-	SUB	LOCALS, R1
-	LOC.OF
-	MOV	R1, R2		; R0: offset to local var/parameter
-	EXTY.P			; Skip top, the type of current expression
-4$:	CMP	R4, EXTYPE
-	BEQ	6$
-	MOV	-(R4), R1
-	SZ.ALG			; R2 += aligned sizeof(subexpression)
-	BR	4$
-6$:	.EMI	P$LAD
+LINI::	MOV	R3, R1
+	TY.CAT
 	MOV	R2, R1
-	BR	EMEUNA		; .EMIT; BR EUNAR
-
-7$:	.EMI	PU$16		; Any Global symbol is represented as address or 16-bit enum value
-	.SYM
-	BCC	8$		; No local symbol found
-	DEC	R0
-	BMI	PENUV		; enum value
-8$:	MOV	(PC)+, R1
-IS.CE::	.WORD	0		; Const Expression mode
-	BNE	ERR.F
-PAFUN:	.EMIT			; Address == 0
-	PUSH	R2		; (SP): Type
-	MOV	#4*400+100, R3	; Global Symbol Name
-	CALL	DEFGSD
-	MOV	TEXT+2, R1
-	TST	-(R1)
-	MOV	(PC)+, R2
-CURSYM:	.WORD	0		; Current Symbol
-	PUSH.D	RELOCS
-	CLR	R0		; Is variable-type
-	POP	R1		; R1: Type
-	BEQ	3$		; Not-Defined type
-	IS.FUN
-	BNE	4$
-	INC	R0
-	BR	4$
-3$:	IF.TOK	T.LPAR, 2$
-	.ERR	12.
-2$:	UN.TOK
-	MOV	#TY.UNK, R1	; Assume undeclared identifier is func
-4$:	TST	R0
-	BNE	5$		; Function
-	NEG	R1		; L-Value
-5$:	PU.EXT
-EUNA.C:	BR	EUNA.B
-
-
-DEFARG:	PP.SYM
-	CK.TOK	T.RPAR
-EMSYM1:	CALL	FISYM1
-	ADC	(SP)		; (SP): 1 if defined(SYMBOL)
-EMSYM3:	POP	TOKVA0
-			; Fallthrough
-EMINT:	MOV	#TY.I, R5
-	.EMI	PU$16
-EM.SCR:	MOV	(PC)+, R1
-TOKVA0::.WORD
-EM.RET:	.EMIT
-	MOV	R5, R1
-	BR	ADDRO3		; PU.EXT; RETURN
-
-
-
-PODECR:	INC	R2		; R2: T.SUB&177
-POINCR:	PUSH	R2
-	CALL	INCR1
-	POP	R2
-	MOV	#3, R0
-	XOR	R0, R2		; R2: opposite Operation (T.SUB for ++)
-POINCA:	.EMI	P$ONE
-	PU.TYI
-INCR8:	MOV	R1, R4
-	MOV	R2, R1		; R1: Token
-	JMP	ARITH		;!!!O
-
-
-EMSYM:	TSTB	IS.PP
-	BEQ	PAVAR
-	CLR	-(SP)			; All unexpanded symbols have value 0
-	CMP	SYNAM0, #^Rdef		; defined
-	BNE	EMSYM3
-	IF.CHR	'(, DEFARG
-	PP.SYM
-	BR	EMSYM1
-
-
-
-
-
-SIZEOF:	MOV	RELOCS+2, R3
-	IF.TOK	T.LPAR, 1$		; (
-	MOV	TEXT+2, R2
-	.UNARY
-	BR	2$
-1$:	CALL	TYOREX
-	BCS	4$
-2$:	MOV	R2, TEXT+2
-	MOV	R3, RELOCS+2
-	PO.EXT
-	BPL	4$
-	NEG	R1
-4$:	SZ.TYP
-	MOV	R1, TOKVA0
-	CALL	EMINT
-	BR	EUNA.C
-
-EMLNG:	MOV	#TY.L, R5
-EMLNG1:	.EMI	PU$32
-EMLNG2:	MOV	(PC)+, R1
-TOKVA1::.WORD	0
-	.EMIT
-	BR	EM.SCR
-
-
-;; Parge unary argument
-PUNARY::G.TOK
-	MOV	#T.ADD&177, R2		; Used in INCR
 	switch
-	case	T.SYM	, EMSYM
-	case	T.LPAR	, LPAR
-	case	T.NOT	, BNOT		; ~
-	case	T.LNOT	, LNOT		; !
-	case	T.SUB	, PNEG		; -
-	case	T.ADD	, PUNARY	; +
-	case	T.AST	, DEREF		; *
-	case	T.INCR	, INCR		; ++
-	case	T.DECR	, DECR		; --
-	case	T.AND	, ADDROF	; &
-	case	T.LFLT	, EMFLT		; float literal
-.IIF NE C$DBL	case	T.LDBL	, EMDBL
-	case	T.LINT	, EMINT		; int literal
-	case	T.LLNG	, EMLNG		; long literal
-	case	T.SIZE	, SIZEOF
-	case	T.LSTR	, EMISTR	; string literal
+	case	TC.SCA	, LINVAL
+	case	TC.PTR	, LINVAL
+	case	TC.ARR	, LINARR
+	case	TC.SCT	, LINSCT
 	default
-ERR.F:	.ERR
+	.ERR	9.
+
+
+
+LINVAL:	.EMI	P$LAD
+	MOV	R5, R1
+	.EMIT
+	MOV	R3, R1
+	NEG	R1
+	PU.EXT
+	.EXPR
+	C.RVAL
+	PO.EXT
+	MOV	R1, R3
+	EXTY.P
+	CALL	ASSIGN
+	EM.POP
+RET.I:	RETURN
+
+ERR.21:	.ERR	21.
+
+;; Begin array or struct initialization
+;; Invoke by JSR R0, CKLBRC
+BEGAGG::CLR	(SP)
+	IF.TOK	T.LBRC, 1$	; {
+	MOV	AGGLV, (SP)
+	BEQ	LINSCT		; .ERR 5 (Unexpected Token)
+1$:	INC	(PC)+
+AGGLV::	.WORD	0		; Aggregation level
+	JMP	(R0)
+
+
+;; Emit code for modifying L-Value
+DREAD:	.EXTYP
+	BPL	ERR.21		; non L-Value
+	NEG	R1
+	PU.EXT
+	SZ.TYP
+	.EMI	$DRD
+EMRE.D:	BR	EMRE.C
+
+
+
+LINSCT:	CK.TOK	T.LBRC		; {
+	ADD	TYPES, R3
+	MOV	2(R3), R4	; Pointer to struct definition
+	CLR	R5		; R5: offset to thr first field
+1$:	IF.TOK	T.RBRC, RET.I
+	TST	(R4)+
+	BEQ	RET.I
+	MOV	(R4)+, R3	; R3: Field Type
+	.LINI
+	MOV	R3, R1		; R1: Field Type
+	SZ.TYP
+	ADD	R1, R5		; R5: offset to next field
+	IF.TOK	T.RBRC, RET.I
+	CK.TOK	T.COMMA
+	BR	1$
+
+
+
+
+LINARR:	IF.TOK	T.LSTR, LINSTR
+	CK.TOK	T.LBRC		; {
+	SV.VEC	BINDS
+	CLR	R1		; parameter list
+	.SUBRC	BNDARG
+	PUSH	MEMSTM
+	MOV	BINDS, R2
+	MOV	BINDS+2, R4
+	ASR	R4		; Array size
+	CALL	AUTARR
+	MOV	-(R3), R3	; R3: Element type
+	MOV	R3, R1
+	SZ.TYP
+	INC	IS.INV
+2$:	MOV	(R2)+, MEMSTM
+	.LINI
+	ADD	R1, R5		; R1: Element size
+	SOB	R4, 2$
+	BR	REBIN8
+
+
+
+
+
+
+LDEF:	T.DCL			; R1: offset in SYMBS, R2: actual type
+	PUSH.D	LOCALS
+	MOV	R2, R3		;!!!?
+	MOV	R2, R1
+	SZ.TYP
+	BMI	1$		; Array of undefined size is allocated in LINARR
+	.EMI	Z$ST		; Allocate space in Stack for local variable
+	.EMIT
+1$:	CLR	R5		; Offset in Stack
+	IF.TOK	T.ASGN, LINI	; =
+RET.J:	RETURN
+
 
 
 
@@ -611,88 +1045,19 @@ TOKVA3::.WORD	0
 
 
 
-EMFLT:	MOV	#TY.FLT, R5
-	BR	EMLNG1
 
-
-
-DEREF:	P.UNRV
-DEREF1:	C.LVAL
-	EXTY.P
-	MOV	R1, (R4)
-RET.D:	RETURN
-
-
-DECR:	INC	R2		; R2: T.SUB&177
-INCR:	.UNARY
-INCR1:	CALL	DREAD
-	CALL	POINCA
-	MOV	#T.ASGN&177, R2
-	.EXTYP
-	BR	INCR8
-
-EXPR.::	PUSH	(PC)+
-TSTKB::	.WORD	0		; Token Stack base
-	PUSH	#EXPR.2
-PBINAR::
-	MOV	SP, TSTKB
-PBINA1:	.UNARY
-PBINA4:	R.TOK
-	BEQ	11$
-	BIT	#TF.BIN, R1	;!!!O? Check sign bit
-	BEQ	3$
-	CMP	SP, TSTKB
-	BEQ	1$
-	MOV	R1, R0
-	SWAB	R0
-	CMPB	R0, 1(SP)
-	BLOS	3$		; Current operator has lower precedence
-1$:	MOV	R1, R2
-	switch
-	case	T.ASGN	, 2$
-	case	T.LAND	, 7$
-	case	T.LOR	, 8$
-	case	T.TERN	, TERNAR
-	default
-	BIT	#TF.ASG, R1
-	BEQ	5$
-	CALL	DREAD
-	BIC	#TF.ASG, R2
-	PUSH	#T.ASGN&177	; Zero precedence for right-associativity
-2$:	MOVB	R2, R2		; Convert to infix operator with Zero precedence for right-associativity
-	BR	10$
-
-
-;; &&
-7$:	CAST.B
-	EM.BEQ			; R1: cond branch's offset
-	BR	4$
-;; ||
-8$:	CAST.B
-	EM.BNE			; || R1: cond branch's offset
-4$:	PUSH	R1
-	EM.POP
-	BR	10$
-5$:	C.RVAL
-10$:	PUSH	R2
-	BR	PBINA1
-
-3$:	UN.TOK
-11$:	CMP	SP, TSTKB
-	BEQ	19$
-	C.RVAL
-	MOV	R1, R4	; R4: type
-	POP	R1
-	MOV	R1, R2
-	switch
-	case	T.LAND	, PANDOR
-	case	T.LOR	, PANDOR
-	default
-	CALL	GENBIN
-	BR	PBINA4
-19$:	TST	R1
-	BNE	RET.D
-	R.TOK
+;; R3: Variable Type
+GINVAL:	IF.TOK	T.LSTR, EMSTR
+	EV.CE
+	MOV	#$SCRAT, R0
+	CMP	R2, #TY.SYM
+	BEQ	INIPTR		; Pointer To Symbol
+	MOV	R3, R1
+	SZ.TYP
+	MOV	R1, R5
+2$:	MOVB	(R0)+, R1
+	PUSH.B	TEXT
+	SOB	R5, 2$
 	RETURN
 
 ;; ?: - ternary
@@ -725,15 +1090,7 @@ TERNAR:	EM.POP
 	.CAST
 	BR	PCOLON
 
-;; Emit code for modifying L-Value
-DREAD:	.EXTYP
-	BPL	ERR.F		; non L-Value
-	NEG	R1
-	PU.EXT
-	SZ.TYP
-	.EMI	$DRD
-EMRE:	.EMIT
-	RETURN
+
 
 
 ;; &&, ||
@@ -742,29 +1099,18 @@ PANDOR:	CAST.B
 ;; : - ternary
 PCOLON:	POP	R1
 	EM.COF
-	BR	PBINA4
+	BR	PBIN.A
 
-EMISTR:	MOV	#TY.C, R1
-	PTR.OF
-	PU.EXT			; `char*` type
-	.EMI	PU$16
-			; Fallthrough
-EMSTR::	MOV	TEXT+2, R1
-	MOV	RDATA+2, R2
-	COM	R2		; Negative means RLD to .rdata
-	PUSH.D	RELOCS
-	.EMIT			; garbage
-EMSTR1:
-2$:	MOV	TMP, R2		; R2: pointer to allocated string
-	MOV	TMP+2, R4	; R4: Size, excluding terminating \0
-	BEQ	3$
-1$:	MOVB	(R2)+, R1
-	PUSH.B	RDATA
-	SOB	R4, 1$
-3$:	IF.TOK	T.LSTR, 2$	; concatenate adjacent strings
-	PU.BZ	RDATA		; Terminating \0
-	RETURN
 
+;; Init local array by string literal
+LINSTR:	PUSH	RDATA+2
+	CALL	EMSTR
+	MOV	RDATA+2, R4
+	SUB	(SP)+, R4	; R1: string length including \0
+	CALL	AUTARR
+	MOV	R4, R1		; R1: string length including \0
+	.EMI	CP$ST
+EMRE.E:	BR	EMRE.D
 
 
 
@@ -773,22 +1119,164 @@ INIPTR:	CMP	(R0)+, (R0)+
 	MOV	(R0), R2	; R2: Symbol
         PUSH.D	RELOCS
 	MOV	-(R0), R1	; R1: Symbol Displacement
-	BR	EMRE		; .EMIT; RETURN
+	BR	EMRE.E		; .EMIT; RETURN
 
 
-;; R3: Variable Type
-GINVAL:	IF.TOK	T.LSTR, EMSTR
-	EV.CE
-	MOV	#$SCRAT, R0
-	CMP	R2, #TY.SYM
-	BEQ	INIPTR		; Pointer To Symbol
-	MOV	R3, R1
-	SZ.TYP
-	MOV	R1, R5
-2$:	MOVB	(R0)+, R1
-	PUSH.B	TEXT
-	SOB	R5, 2$
+
+
+;; &&
+BNLAND:	CAST.B
+	EM.BEQ			; R1: cond branch's offset
+	BR	BIN4
+;; ||
+BNLOR:	CAST.B
+	EM.BNE			; || R1: cond branch's offset
+BIN4:	PUSH	R1
+	EM.POP
+	BR	BIN10
+BIN5:	C.RVAL
+BIN10:	PUSH	R2
+	BR	PBINA1
+
+
+
+GOTO:	G.SYMB
+GOTO1:	BEQ	ERR.19
+	PUSH	#ESTMT
+;; Translate goto/break/continue
+;; R1: label
+TGOTO:	PUSH.W	GOTOS
+	.EMI	$GOTO
+	CLR	R1
+	LOC.OF
+	.EMIT
+	MOV	TEXT+2, R1
+	PUSH.W	GOTOS
+	BR	EMRE.E
+
+;; continue
+CONTIN:	MOV	(PC)+, R1
+CUCONT:	.WORD	0		; Current `continue;` statement target
+	BR	GOTO1
+
+;; break
+BREAK:	MOV	(PC)+, R1
+CUBRK:	.WORD	0		; Current point to Break target
+	BR	GOTO1
+
+ERR.19:	.ERR	19.
+
+
+
+
+EXPR.::	PUSH	(PC)+
+TSTKB::	.WORD	0		; Token Stack base
+	PUSH	#EXPR.2
+PBINAR::
+	MOV	SP, TSTKB
+PBINA1:	.UNARY
+PBINA4:	R.TOK
+	BEQ	BIN11
+	BIT	#TF.BIN, R1	;!!!O? Check sign bit
+	BEQ	BIN3
+	CMP	SP, TSTKB
+	BEQ	1$
+	MOV	R1, R0
+	SWAB	R0
+	CMPB	R0, 1(SP)
+	BLOS	BIN3		; Current operator has lower precedence
+1$:	MOV	R1, R2
+	switch
+	case	T.ASGN	, 2$
+	case	T.LAND	, BNLAND
+	case	T.LOR	, BNLOR
+	case	T.TERN	, TERNAR
+	default
+	BIT	#TF.ASG, R1
+	BEQ	BIN5
+	CALL	DREAD
+	BIC	#TF.ASG, R2
+	PUSH	#T.ASGN&177	; Zero precedence for right-associativity
+2$:	MOVB	R2, R2		; Convert to infix operator with Zero precedence for right-associativity
+	BR	BIN10
+
+
+
+BIN3:	UN.TOK
+BIN11:	CMP	SP, TSTKB
+	BNE	19$
+	TST	R1
+	BNE	RET.K
+	R.TOK
 	RETURN
+19$:	C.RVAL
+	MOV	R1, R4	; R4: type
+	POP	R1
+	MOV	R1, R2
+	switch
+	case	T.LAND	, PANDOR
+	case	T.LOR	, PANDOR
+	default
+	CALL	GENBIN
+PBIN.A:	BR	PBINA4
+
+
+
+
+
+
+
+;; Init Global char array by string literal
+GINSTR:	PUSH	#GDEF1
+GINST1:	PUSH	RDATA+2
+	CALL	EMSTR1
+	MOV	RDATA, R4
+	ADD	(SP), R4	; R3: Address of string
+	MOV	RDATA+2, R0
+	SUB	(SP), R0	; R0: string length including \0
+	SUB	R0, R5
+	BGE	1$
+	ADD	TYPES, R3
+	MOV	R0, 4(R3)	; Literal defines array size
+	CLR	R5
+1$:	MOVB	(R4)+, R1
+	PUSH.B	TEXT
+	SOB	R0, 1$
+	POP	RDATA+2
+RET.K:	RETURN
+
+
+
+
+
+;; R3: type
+GINI::	MOV	R3, R1
+   	SZ.TYP
+	MOV	R1, R5		; R5: sizeof variable
+	MOV	R3, R1
+	TY.CAT
+	MOV	R2, R1
+	switch
+	case	TC.SCA	, GINVAL
+	case	TC.PTR	, GINVAL
+	case	TC.ARR	, GINARR
+	case	TC.SCT	, GINSCT
+	default
+ERR.9:	.ERR	9.
+
+
+
+
+;; return statement
+RETUR::	IF.TOK	T.SEMI, 2$
+	CALL	PEXPR
+2$:	MOV	(PC)+, R1
+LOCFUN::.WORD	0		; LOCALS+2 at entry of function
+	.UNWTO
+EMRET::	.EMI	T$RET
+RET.L:	RETURN
+
+
 
 
 
@@ -829,8 +1317,11 @@ DEFUN:	MOV	R5, TEXT+2
 LNGOTO:
 	MOV	GOTOS, R3
 1$:	SUB	#4, GOTOS+2
-	BMI	8$
-	MOV	(R3)+, R1
+	BPL	8$
+	.CLEAR	GOTOS
+	.CLEAR	LABELS
+	BR	EMRET		; .EMIT T$RET; RETURN
+8$:	MOV	(R3)+, R1
 	.FIND2	LABELS
 	BCC	ERR.9		; Undefined label
 	MOV	R2, R5		; R5: SP offset
@@ -840,70 +1331,8 @@ LNGOTO:
 	ADD	TEXT, R1
 	SUB	R5, -(R1)	; Adjust $GOTO argument for unwind offset
 	BR	1$
-8$:	.CLEAR	GOTOS
-	.CLEAR	LABELS
-	JMP	EMRET		; .EMIT T$RET; RETURN
 
 
-
-;; Init Global char array by string literal
-GINSTR:	PUSH	#GDEF1
-GINST1:	PUSH	RDATA+2
-	CALL	EMSTR1
-	MOV	RDATA, R4
-	ADD	(SP), R4	; R3: Address of string
-	MOV	RDATA+2, R0
-	SUB	(SP), R0	; R0: string length including \0
-	SUB	R0, R5
-	BGE	1$
-	ADD	TYPES, R3
-	MOV	R0, 4(R3)	; Literal defines array size
-	CLR	R5
-1$:	MOVB	(R4)+, R1
-	PUSH.B	TEXT
-	SOB	R0, 1$
-	POP	RDATA+2
-	RETURN
-
-;; { "foo" }   array initialization
-GIBSTR:	POP	R3
-	CALL	GINST1
-	BR	COMAGG
-
-;; Global Array init
-;; R3: Type
-GINARR: IF.TOK	T.LSTR, GINSTR
-	JSR	R0, BEGAGG
-	PUSH	R3
-	MOV	R3, R1
-	IS.ARR			; R1: Element Type
-	MOV	R1, R3		; R3: Element Type
-	SZ.TYP
-	MOV	R1, R4		; R4: element size
-	CMP	R4, #1
-	BNE	5$
-	IF.TOK	T.LSTR, GIBSTR
-5$:	CLR	R2		; R2: #elements
-1$:	IF.TOK	T.RBRC, 2$
-	.GINI
-	INC	R2
-	SUB	R4, R5
-	BEQ	4$
-	IF.TOK	T.RBRC, 2$
-	CK.TOK	T.COMMA
-	BR	1$
-2$:	POP	R1		; Array Type
-	TST	R5
-	BPL	3$
-	ADD	TYPES, R1
-	MOV	R2, 4(R1)	; Literal defines array size
-3$:	BR	ONRBRC
-4$:	POP	R1		; Array Type
-;; Filled all items of the aggregation
-COMAGG:	TST	(SP)+
-	BNE	EAGGLV		;'{' not acquired
-	CK.TOK	T.RBRC
-	BR	EAGGLV
 
 
 GINSCT:	JSR	R0, BEGAGG
@@ -923,6 +1352,35 @@ GINSCT:	JSR	R0, BEGAGG
 	BR	1$
 
 
+
+
+;; Global Array init
+;; R3: Type
+GINARR: IF.TOK	T.LSTR, GINSTR
+	JSR	R0, BEGAGG
+	PUSH	R3
+	MOV	R3, R1
+	IS.ARR			; R1: Element Type
+	MOV	R1, R3		; R3: Element Type
+	SZ.TYP
+	MOV	R1, R4		; R4: element size
+	CMP	R4, #1
+	BNE	5$
+	IF.TOK	T.LSTR, GIBSTR
+5$:	CLR	R2		; R2: #elements
+1$:	IF.TOK	T.RBRC, 2$
+	.GINI
+	INC	R2
+	SUB	R4, R5
+	BEQ	GINAR4
+	IF.TOK	T.RBRC, 2$
+	CK.TOK	T.COMMA
+	BR	1$
+2$:	POP	R1		; Array Type
+	TST	R5
+	BPL	ONRBRC
+	ADD	TYPES, R1
+	MOV	R2, 4(R1)	; Literal defines array size
 ;; End of struct of array
 ;; Invoked by IF.TOK T.RBRC
 ONRBRC:	TST	(SP)+
@@ -932,20 +1390,97 @@ EAGGLV:	DEC	AGGLV
 	BR	GDEF1
 
 
-;; R3: type
-GINI::	MOV	R3, R1
-   	SZ.TYP
-	MOV	R1, R5		; R5: sizeof variable
-	MOV	R3, R1
-	TY.CAT
-	MOV	R2, R1
+;; case
+HCASE:	EV.CIE
+	MOV	TEXT+2, R2
+	PUSH.D	CASES
+HCASE1:	CK.TOK	T.COLON
+			; Fallthrough
+;; Parse Statement
+STMT::	G.TOK
 	switch
-	case	TC.SCA	, GINVAL
-	case	TC.PTR	, GINVAL
-	case	TC.ARR	, GINARR
-	case	TC.SCT	, GINSCT
+	case	T.GOTO	, GOTO
+	case	T.BREAK	, BREAK
+	case	T.CONT	, CONTIN
+	case	T.DEFA	, HDEFAU
+	case	T.LBRC	, BLOCK		; {
+	case	T.IF	, IF
+	case	T.CASE	, HCASE
+	case	T.SEMI	, RET.K		; Null statement
+	case	T.TYPE	, LTYPED
+;	case	T.AUTO	, DECLAR
+;	case	T.REGI	, DECLAR
+	case	T.STAT	, DECLAR
+	case	T.SYM	, PSYM
+	case	T.FOR	, FOR
+	case	T.WHILE	, WHILE
+	case	T.DO	, DO
+	case	T.RETURN, RETUR
+	case	T.SWIT	, SWITC
 	default
-ERR.9:	.ERR	9.
+	.TYPP2
+	BCC	PEXPR
+;; variable declaration
+DECLAR:	MOV	R1, R3
+1$:	PUSH	R3
+	CALL	LDEF
+	POP	R3
+	IF.TOK	T.COMM, 1$
+;; End of declarations
+ESTMT::	CK.TOK	T.SEMI		; Check for ';'
+	RETURN
+
+;; default:
+HDEFAU::
+	MOV	TEXT+2, @CASES
+	BR	HCASE1
+
+DFUN1:	PUSH.D	VARS		; Offset in TEXT
+	CALL	GNDEF		; Offset in TEXT is undefined yet
+				; Find again
+DFUN:	MOV	R3, R1
+	.FIND2	VARS
+	BCC	DFUN1		; Add declaration to VARS
+	IF.TOK	T.LBRC, DEFUN
+	RETURN
+
+
+ERR.E:	.ERR
+
+;; Local typedef
+LTYPED:	CALL	TYPEDEF
+	BR	ESTMT
+
+PSYM:	IF.CH	':, LABEL
+	BCC	ERR.E
+	MOV	#T.SYM, R1
+	.TYPP2
+	BCS	DECLAR
+PEXPR:	.PEXPR
+	C.RVAL
+	EM.POP
+ESMT.A:	BR	ESTMT
+
+LABEL:	.SYMB
+	CALL	NEWLAB
+	BR	STMT
+
+
+;; { "foo" }   array initialization
+GIBSTR:	POP	R3
+	CALL	GINST1
+	BR	COMAGG
+
+
+GINAR4:	POP	R1		; Array Type
+;; Filled all items of the aggregation
+COMAGG:	TST	(SP)+
+	BNE	EAGGLV		;'{' not acquired
+	CK.TOK	T.RBRC
+	BR	EAGGLV
+
+GNDEF:	PUSH.W	VARS, -1	; Offset in TEXT
+	RETURN
 
 ;; Process top-level definition
 GDEF::	CLR	LOCALS+2
@@ -971,30 +1506,162 @@ GDEF::	CLR	LOCALS+2
 	SZ.TYP
 	MOV	R1, R5		; R5: sizeof variable
 GDEF1:	DEC	R5
-	BMI	RET.G
+	BMI	RET.M
 	PU.BZ	TEXT
 	BR	GDEF1
 
-DFUN1:	PUSH.D	VARS		; Offset in TEXT
-	CALL	GNDEF		; Offset in TEXT is undefined yet
-				; Find again
-DFUN:	MOV	R3, R1
-	.FIND2	VARS
-	BCC	DFUN1		; Add declaration to VARS
-	IF.TOK	T.LBRC, DEFUN
+
+BLOCK:	PUSH	TDEFS+2, LOCALS+2
+1$:	IF.TOK	T.RBRC, 2$
+	CALL	STMT
+	BR	1$
+2$:	MOV	(SP), R1
+	.UNWTO
+	POP	LOCALS+2, TDEFS+2
+RET.M:	RETURN
+
+
+IF:	.BEXPR
+	EM.BEQ
+	MOV	R1, R4
+	.STMT
+	IF.TOK	T.ELSE, 2$
+	MOV	R4, R1
+	BR	3$
+2$:	EM.JMP
+	MOV	R1, R5
+	MOV	R4, R1
+	EM.COF
+	.STMT
+	MOV	R5, R1
+3$:	EM.COF
 	RETURN
 
 
 
-GNDEF:	PUSH.W	VARS, -1	; Offset in TEXT
-RET.G:	RETURN
+
+WHILE:	CLR	R4
+	JSR	R5, LOOP
+	.BEXPR
+	EM.BEQ
+	MOV	R1, R2
+	BR	WHILE2
+
+FOR:	CK.TOK	T.LPAR
+	IF.TOK	T.SEMI, 1$
+	CALL	PEXPR
+1$:	CLR	R2		; R2:0 means no condition
+     	MOV	TEXT+2, R3	; R3: place for Offset to Condition
+	IF.TOK	T.SEMI, 2$
+	.PEXPR
+	CAST.B
+	EM.POP
+	EM.BEQ
+	MOV	R1, R2
+;	PUSH.W	BREAKS
+	CK.TOK	T.SEMI
+2$:	EM.JMP
+	MOV	R1, R4		; R4: place for Offset to Body
+	JSR	R5, LOOP
+	IF.TOK	T.RPAR,	3$
+	.PEXPP
+	EM.POP
+3$:	MOV	R3, R1
+	EM.JMP
+	MOV	R4, R1
+	EM.COF
+WHILE2:	.STMT
+	MOV	CUCONT, R1
+	CALL	TGOTO
+E.LOOP:	MOV	R2, R1
+	BEQ	ELOOP2
+	EM.COF
+ELOOP2:	POP	CUCONT
+	BR	E.BRK
+
+DO:     .EMI	T$JMP
+	.EMIT	4
+	JSR	R5, LOOP
+	EM.JMP
+	MOV	R1, R4		; R4: place to insert the offset to condition
+	.STMT
+	CK.TOK	T.WHILE
+	MOV	R4, R1
+	EM.COF
+	.BEXPR
+	EM.BNE
+	MOV	R4, R2
+	TST	(R2)+		; R2: TEXT-offset of body
+	EM.OFF
+	BR	ELOOP2
+
+
+
+SWITC:	PUSH	CUBRK
+	CALL	NXILAB
+	MOV	R1, CUBRK
+	SV.VEC	CASES
+	CK.TOK	T.LPAR
+	.PEXPP
+	CAST.I
+	PO.EXT
+	EM.PLC	T$SWIT
+	MOV	R1, R5
+	CLR	R1		; initial default
+	PUSH.W	CASES
+	.STMT
+	EM.JMP
+	PUSH	R1
+;	PUSH.W	BREAKS
+	MOV	R5, R1
+	EM.COF
+
+	MOV	#CASES, R3
+	MOV	(R3)+, R4
+	TST	(R4)+
+	MOV	(R3), R1
+	ASR	R1
+	ASR	R1
+	.EMIT
+	MOV	R1, R5
+	BEQ	4$
+3$:	MOV	(R4)+, R1
+	.EMIT
+	MOV	(R4)+, R1
+	TST	-(R1)
+	SUB	TEXT+2, R1
+	.EMIT
+	SOB	R5, 3$
+4$:	MOV	@-(R3), R1	; MOV @CASES, R1	; `default` label
+	BEQ	5$
+	TST	-(R1)
+	SUB	TEXT+2, R1
+5$:	.EMIT
+	POP	R1
+	EM.COF
+
+	RE.VEC	CASES
+E.BRK:	MOV	CUBRK, R1
+	CALL	NEWLAB
+	POP	CUBRK
+	RETURN
+
+
 
 
 
 .RDATA
 
 NOTTAB:	.BYTE	BNOT$L, BNOT$I, LNOT$L, LNOT$I
-NEGTAB:	.BYTE	NEG$L, NEG$I
+NEGTAB:	.BYTE	NEG$L,  NEG$I
+
+TH.I::	.BYTE	ADD$I, SUB$I, MUL$I, DIV$I, MOD$I, AND$I, OR$I, XOR$I, LSH$I, RSH$I
+TH.L::	.BYTE	ADD$L, SUB$L, MUL$L, DIV$L, MOD$L, AND$L, OR$L, XOR$L, LSH$L, RSH$L
+TH.F::	.BYTE	ADD$F, SUB$F, MUL$F, DIV$F
+
+TH.SBR::.BYTE	EQ$, NE$, LT$, LEQ$, GT$, GEQ$
+TH.UBR::.BYTE	EQ$, NE$, LO$, LOS$, HI$, HIS$
+
 
 
 

@@ -776,6 +776,7 @@ NEXTCH::MOV	MEMSTM, R4
 	INC	2(R4)		; ++cur
 	RETURN
 
+FLSLV:	.WORD	0		; (Negative) Level of nesting inside false .IF branch
 
 
 .RADAT
@@ -814,8 +815,6 @@ VAARGS::.ASCIZ	"__VA_ARGS__"
 SYDEV:	.ASCIZ	"SY:"
 
 
-.PSECT	.bss
 
-FLSLV:	.WORD	0		; (Negative) Level of nesting inside false .IF branch
 
 .END
