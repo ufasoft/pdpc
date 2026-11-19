@@ -441,9 +441,9 @@ EXPANS	== ASCII + 4	; ::	.WORD	0, 0
 BINDS	== EXPANS + 4	; ::	.WORD	0, 0		; List of MemoryStream pointers
 MEMSTM	== BINDS + 4	; ::	.WORD	0		; Macro-expansion result
 ;;--
+FLSLV	== MEMSTM + 2	; ::	.WORD	0		; (Negative) Level of nesting inside false .IF branch
 
-
-EBSS	= MEMSTM + 2
+EBSS	= FLSLV + 2
 
 
 .END

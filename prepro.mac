@@ -9,8 +9,7 @@
 .INCLUDE /ccmacr.inc/
 
 .GLOBL	TEXT, IS.OPE, BNDARG, NARGS, RTOK, ASCII, BINDS, TMP, MEMSTM, EXPANS, REBIND, CURARG
-.GLOBL	INTOK, $PABOR
-.GLOBL	RE, $PRSNL
+.GLOBL	INTOK, $PABOR, RE, $PRSNL, FLSLV
 
 
 .TEXT
@@ -774,7 +773,6 @@ NEXTCH::MOV	MEMSTM, R4
 	INC	2(R4)		; ++cur
 	RETURN
 
-FLSLV:	.WORD	0		; (Negative) Level of nesting inside false .IF branch
 
 
 .RADAT
