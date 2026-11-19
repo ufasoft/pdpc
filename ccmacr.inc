@@ -171,9 +171,10 @@
 	.WORD	value
 .ENDM	.GSD
 
-;; Parse multiple field declaration
+
+;; Parse typed declaration
 ;; R3: common type
-;; OUTPUT: R1: Symbol; R2: Type
+;; OUTPUT: R1: Symbol or 0; R2: Type
 .MACRO	T.DCL
 	TRAP	^o123
 .ENDM	T.DCL

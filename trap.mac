@@ -26,11 +26,11 @@ ST.OFF	= 14	; First Word Before Stack Frame ;   Number Of Saved Bytes In Stack F
 
 .GLOBL	$L2I, $F2L, O$NE
 .GLOBL	.ABORT, $OOM, MEMSTM, NEXTCH, NEXTB, NEXTD, RTOK, HAS.TO, NX.TOK, TDEFS, ENUMS, VARS
-.GLOBL	STMT, PUNARY, IS.OPE
+.GLOBL	STMT, PUNARY, IS.OPE, PARTYP
 .GLOBL	PU$16, T$JMP, $BNE, $BEQ, I$POP, L$POP, SK$ST, AD$SP, callo$, $C2I, $SC2I, I$F
 .GLOBL	LOCALS, ASCII, TMP2RA, TOKR
 .GLOBL	PBINAR, TSTKB, EXTYPE, SV.ASC, GDEF, SYMBS, $READ, I$RD, $I2L, DEFGSD, GSD
-.GLOBL	DCLTOR, TDECLS, IS.CE, GINI, TYPES, GINI, LINI
+.GLOBL	TDECLS, IS.CE, GINI, TYPES, GINI, LINI
 .GLOBL	EXPR., RCH, CHR.R, RESV10
 
 
@@ -481,9 +481,14 @@ EMIR1.:	PUSH.W	TEXT
 
 EMIT.:	PUSH	R1
 EMIT.1:	MOV	(R4)+, R1
-	.EMIT
+EMIT.2:	.EMIT
 	BR	POPRE4		; POP R1; BR RE4
 
+JMP.EM: .EMI	T$JMP
+	PUSH	TEXT+2
+	SUB	(SP), R1
+	SUB	#2, R1		; Don't use -(R1). R1 may be a garbage here
+	BR	EMIT.2
 
 
 ;; Read mandatory symbol into $SCRAT
@@ -542,7 +547,8 @@ OFF.EM:	MOV	TEXT, R3
 RE.E:	BR	RE.C
 
 ALG.SZ:	SZ.TYP
-	EVN.UP
+	CMPB	(R0)+, (R1)+		; R0: 1; ++R1
+	BIC	R0, R1			; Round up R1 to WORD alignment
 	ADD	R1, (SP)		; Add to Caller's R2
 	BR	RE.E
 
@@ -712,8 +718,7 @@ OF.LOC:	MOV	R1, R4
 	BEQ	RET.R0
 	MOV	-(R5), R1	; R1: local var type
 	TST	-(R5)
-	SZ.TYP
-	EVN.UP
+	SZ.ALG
 	ADD	R1, R0		; R0: accumulated offset
 	BR	1$
 
@@ -793,7 +798,20 @@ PEXPR1:	EM.POP
 PEXPR.:	.EXPR
 ;	C.RVAL
 	IF.TOK	T.COMMA, PEXPR1
-	.EXTYP
+EXTYP.:	PO.EXT
+	BR	EXT.PU
+
+;!!!R	EXTY.P
+;	MOV     (R4), R1
+;	BR      RE.G
+
+
+B.CAST:	C.RVAL
+	EM.POP
+	.EMI	O$NE
+TYI.PU:	MOV	#TY.I, R1
+			; Fallthrough
+EXT.PU:	PUSH.W	EXTYPE
 	BR	RE.G
 
 
@@ -806,16 +824,9 @@ BEXPR.:	CK.TOK	T.LPAR
 
 PEXPP.:	.PEXPR
 	CK.TOK	T.RPAR
-	BR	RE.G
-
-
-JMP.EM: .EMI	T$JMP
-	MOV	TEXT+2, R2
-	SUB	R2, R1
-	SUB	#2, R1		; Don't use -(R1). R1 may be a garbage here
-	.EMIT
-	MOV	R2, R1
 RE.H:	BR	RE.G
+
+
 
 PLC.EM:	MOV	(R4)+, R1
 	.EMIT
@@ -885,7 +896,7 @@ POP.EM:	PO.EXT
 	CMP	R1, #2
 	BLOS	POPEM1
 	.EMI	SK$ST
-EMITRB:	BR	EMIT.R		; .EMIT; BR RE
+EMITRB:	BR	EMIT.R		; .EMIT; BR RE4
 POPEM1:	.EMI	I$POP
 RE.I:	BR	RE.H
 
@@ -1039,15 +1050,14 @@ EMSYM.:	MOV	(R4)+, SYNAM0
 	MOV	TEXT+2, R1
 	PUSH.D	RELOCS
 	CLR	R1
-2$:	.EMIT
-RE4.K:	BR	RE4.J
+2$:	BR	EMIT.R
 
 
 GSD.:	CMP	(R0)+, (R0)+	; R0: 4
 1$:	MOV	(R4)+, R1
 	PUSH.W	GSD
 	SOB	R0, 1$
-	BR	RE4.K
+RE4.K:	BR	RE4.J
 
 
 ;; C.LVAL
@@ -1179,28 +1189,18 @@ P.EXTY: MOV	EXTYPE+2, R4
 	MOV	R4, R4.OFF(SP)
 	BR	RE.L
 
-B.CAST:	C.RVAL
-	EM.POP
-	.EMI	O$NE
-TYI.PU:	MOV	#TY.I, R1
-			; Fallthrough
-EXT.PU:	PUSH.W	EXTYPE
-	BR	RE.L
-
-EXTYP.:	PO.EXT
-	BR	EXT.PU
-
-;!!!R	EXTY.P
-;	MOV     (R4), R1
-;	BR      RE.L
-
-
 
 TYPED.:	.TYPEP
 	BCC	ERR.C
 	MOV	R1, R3
-DCL.T:	CALL	DCLTOR
-	MOV	R2, (SP)	; Return Type in R2
+DCL.T:	MOV	R3, (SP)	; Return Type in R2
+	CLR	R2
+	CALL	PARTYP
+	TST	R2
+	BEQ	RE.L
+	ADD	TYPES, R2
+	MOV	(SP), 2(R2)
+	MOV	R3, (SP)
 	BR	RE.L
 
 TRY2I.:	CMP	R1, #TY.C
@@ -1211,19 +1211,14 @@ TRY2I.:	CMP	R1, #TY.C
 9$:	BR	RE.L
 
 
-UP.EVN:	INC	R1
-	BIC	#1, R1
-	BR	RE.L
-
 
 ;; Encode 3 chars of C identifier in (R4) to CRADIX-50
 A2R50A:	CLR	R5
 	MOV	#3, R2
 1$:	MUL	#50, R5
-	TSTB	(R4)
+	MOVB	(R4), R0
 	BEQ	5$
-	MOVB	(R4)+, R0
-	CMP	R0, #'_
+	CMPB	(R4)+, #'_
 	BEQ	3$
 	BIC	#40, R0
 	SUB	#100, R0
@@ -1247,14 +1242,13 @@ TRAPS:	.WORD	W.REMO	, W.PUSH	, REALO.	, W.POP		, SUBRC.							; 100
 	.WORD	CE.EV	, SYMB.G	, GSD.		, DCL.T		, FLD.T		, TRY2I.	, B.CAST	, P.EXTY	; 120
 	.WORD	CHR.R	, CHR.G		, UNGET.	, CHR.IF	, B.PUSH	, SYM.G		, WS.SK		, D.PUSH	; 130
 	.WORD	WORD.F	, PEXPP.	, DEL.LS	, R50.A		, FDWOR.	, CLEAR.	, POP.EM	, JMP.EM	; 140
-	.WORD	UP.EVN	, OFF.EM	, COF.EM	, PLC.EM	, CIE.EV	, BEXPR.	, PEXPR.	, ITER.		; 150
+	.WORD	FUN.IS	, OFF.EM	, COF.EM	, PLC.EM	, CIE.EV	, BEXPR.	, PEXPR.	, ITER.		; 150
 	.WORD	TOK.G	, TOK.IF	, TYPED.	, TOK.UN	, TYPEP.	, FIND.		, FIND2.	, SYM.		; 160
 	.WORD	BLK.OU	, W.OU		, FIN.OU	, PTR.IS	, OF.PTR	, TYP.SZ	, RVAL.C	, LVAL.C	; 170
 	.WORD	EMIT.	, ALG.SZ	, EXPR.		, EXT.PO	, UNRV.P	, OF.LOC	, CAT.TY	, UNWTO.	; 200
 	.WORD	STMT.	, BZ.PU		, CALLO.	, UNGE2.	, LCHR.R	, NEXTC.	, TOK.R		, B.PUSH	; 210
 	.WORD	NEXTB.	, SYM.PP	, EMIR1.	, FI.LOC	, BEQ.EM	, BNE.EM	, EXT.PU	, W.PU2		; 220
-	.WORD	SYMB.	, B.OU		, FUN.IS						 		 	; 230
-																	; 240
+	.WORD	SYMB.	, B.OU							 		 					; 230
 .EVEN
 
 
