@@ -172,7 +172,7 @@ LINK:	.WORD	1		;SELF-MOD	 0 means -c option (Compile only)
 8$:	JMP	COMPIL
 
 
-HELP:	.ASCII	"PDP C Compiler 2026.4 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
+HELP:	.ASCII	"PDP C Compiler 2026.5 ufasoft.com/pdpc  (c) Sergey Pavlov"<C.NL>
         .ASCII	"Usage: CC [options] file.c"<C.NL>
         .ASCII	"OPTIONS:"<C.NL>
         .ASCII	" -c"<C.HT><C.HT>"Compile, but don't link"<C.NL>

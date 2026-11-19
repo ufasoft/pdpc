@@ -11,11 +11,6 @@
 .GLOBL	SYNAM0, SYNAM1, TRYEXP
 
 
-;; Round up R1 to Even value
-.MACRO	EVN.UP
-	TRAP	^o150
-.ENDM	EVN.UP
-
 
 ;; Inserts offset to target into place
 ;; R1: place in TEXT
@@ -361,7 +356,7 @@
 ;; R1: TYPES offset
 ;; OUTPUT: ZF=1 if the type is a function
 .MACRO	IS.FUN
-	TRAP	^o232
+	TRAP	^o150
 .ENDM	IS.FUN
 
 ;; Finalize block

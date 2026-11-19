@@ -25,7 +25,7 @@ stderr::.WORD	$DFSTM
 1$:	MOV	errno, R1
 	CALL	strerror
 	MOV	R0, R1
-	.fputs
+$PRSNL::.fputs
 	MOV	#C.NL, R1
 	.fputc
 	RETURN

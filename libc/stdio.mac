@@ -222,11 +222,11 @@ fgetc::
 
 ;; int fclose(FILE *stream)
 fclose::
-	INC	R0		; R0: 1
-	MOVB	1(R1), R4
+	CMPB	(R0)+, (R1)+	; R0: 1; ++R1
+	MOVB	(R1), R4
 	ASH	R4, R0
 	BIC	R0, CHBMAP	; free channel
-	BITB	#F.TMP, (R1)
+	BITB	#F.TMP, -(R1)
 	BEQ	2$
 	.PURGE	R4
 	BR	3$
@@ -255,10 +255,8 @@ fflush::
 	BR	$IOOK
 
 
-FOPENE:	MOVB	$ERRBY, R0
-	MOVB	LOOERR(R0), R3
-FOPEN8:	MOV	R3, (PC)+
-errno::	.WORD	0
+FOPENE:	CALL	E2ERNO
+FOPEN8:	MOV	R3, errno
 	MOV	R4, R1		; Unwind. R1: FILE*
 	BR	FRE
 FOPENW:	CLR	R3
@@ -308,13 +306,14 @@ CHBMAP:	.WORD	0		; bitmap of open channels
 	BCC	FOPEN6
 			; Fallthrough
 STMERR:	BISB	#F.ERR, (R4)
-	MOVB	$ERRBY, R0
+	PUSH	#$IOOK		; CLR R0; RETURN
+			; Fallthrough
+;; Convert $ERRBY to errno
+E2ERNO:	MOVB	$ERRBY, R0
 	MOVB	LOOERR(R0), R3
-	MOV	R3, errno
-	BR	$IOOK		; CLR R0; RETURN
-
-
-
+	MOV	R3, (PC)+
+errno::	.WORD	0
+	RETURN
 
 .RDATA
 

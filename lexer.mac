@@ -12,7 +12,7 @@
 .INCLUDE /ccmacr.inc/
 
 
-
+.TEXT
 
 PACHR1:	.NEXTB
 PACHR2:	CMPB	R1, #'\

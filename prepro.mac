@@ -10,10 +10,10 @@
 
 .GLOBL	TEXT, IS.OPE, BNDARG, NARGS, RTOK, ASCII, BINDS, TMP, MEMSTM, EXPANS, REBIND, CURARG
 .GLOBL	INTOK, $PABOR
-.GLOBL	RE
+.GLOBL	RE, $PRSNL
 
 
-.PSECT
+.TEXT
 
 ;;	struct InputFile {
 ;;	    InputFile *next;
@@ -173,9 +173,7 @@ PERR:	DEC	ASCII + 2	; Clear terminating '\0'
 	.UNGET
 	PU.BZ	ASCII
 	MOV	ASCII, R1
-	.fputs
-	MOV	#C.NL, R1
-	.fputc
+	CALL	$PRSNL		; .fputs; MOV #C.NL, R1; .fputc
 	.ERR	3
 
 ERREXI::JMP	$PABOR		; To prevent closing .OBJ file. It should be removed
@@ -790,7 +788,7 @@ PDP11:	.WORD	0
 	.ASCIZ	"__pdp11__"<0><-1>"40"
 	.EVEN
 BKC:	.WORD	PDP11
-	.ASCIZ	"_PDPC"<0><-1>"20264"
+	.ASCIZ	"_PDPC"<0><-1>"20265"
 	.EVEN
 DATE:	.WORD	BKC
 	.ASCIZ	"__DATE__"

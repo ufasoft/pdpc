@@ -29,11 +29,12 @@ Used Block:
 
 .TEXT
 
+
 MALLO3:	MOV	R2, R1
 ;; void *malloc(size_t size)
 malloc::
-	INC	R1
-	BIC	#1, R1		; Round up to word alignment
+	CMPB	(R0)+, (R1)+	; R0: 0; ++R1
+	BIC	R0, R1		; Round up R1 to WORD alignment
 	BEQ	RET.A
 	MOV	R1, R4		; R4: size without header
 	TST	(R1)+		; Reserve for "Used Block" header
