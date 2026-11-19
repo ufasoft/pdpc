@@ -747,8 +747,7 @@ ARITH::	MOV	R1, R2			; R2: token
 
 ;;  (typeof b)a op b
 	.EMI	SAV$		; Save b
-	MOV	R3, R1
-	SZ.TYP
+	SZ.TY3
 	PUSH	R1
 	.EMIT
 	MOV	R3, R1
@@ -819,7 +818,6 @@ AUTARR:	MOV	R3, R1		; R1: Array Type
 	SZ.TYP
 	.EMI	Z$ST		; Allocate space in Stack for local array
 EMRE.C:	BR	EMRE.B
-
 
 
 
@@ -895,12 +893,6 @@ REBIND::MFPS	R0
 
 
 
-
-
-
-
-
-
 LINI::	MOV	R3, R1
 	TY.CAT
 	MOV	R2, R1
@@ -911,7 +903,6 @@ LINI::	MOV	R3, R1
 	case	TC.SCT	, LINSCT
 	default
 	.ERR	9.
-
 
 
 LINVAL:	.EMI	P$LAD
@@ -962,14 +953,11 @@ LINSCT:	CK.TOK	T.LBRC		; {
 	BEQ	RET.I
 	MOV	(R4)+, R3	; R3: Field Type
 	.LINI
-	MOV	R3, R1		; R1: Field Type
-	SZ.TYP
+	SZ.TY3
 	ADD	R1, R5		; R5: offset to next field
 	IF.TOK	T.RBRC, RET.I
 	CK.TOK	T.COMMA
 	BR	1$
-
-
 
 
 LINARR:	IF.TOK	T.LSTR, LINSTR
@@ -983,8 +971,7 @@ LINARR:	IF.TOK	T.LSTR, LINSTR
 	ASR	R4		; Array size
 	CALL	AUTARR
 	MOV	-(R3), R3	; R3: Element type
-	MOV	R3, R1
-	SZ.TYP
+	SZ.TY3
 	INC	IS.INV
 2$:	MOV	(R2)+, MEMSTM
 	.LINI
@@ -994,23 +981,16 @@ LINARR:	IF.TOK	T.LSTR, LINSTR
 
 
 
-
-
-
 LDEF:	T.DCL			; R1: offset in SYMBS, R2: actual type
 	PUSH.D	LOCALS
 	MOV	R2, R3		;!!!?
-	MOV	R2, R1
-	SZ.TYP
+	SZ.TY3
 	BMI	1$		; Array of undefined size is allocated in LINARR
 	.EMI	Z$ST		; Allocate space in Stack for local variable
 	.EMIT
 1$:	CLR	R5		; Offset in Stack
 	IF.TOK	T.ASGN, LINI	; =
 RET.J:	RETURN
-
-
-
 
 
 .IF NE C$DBL
@@ -1035,8 +1015,7 @@ GINVAL:	IF.TOK	T.LSTR, EMSTR
 	MOV	#$SCRAT, R0
 	CMP	R2, #TY.SYM
 	BEQ	INIPTR		; Pointer To Symbol
-	MOV	R3, R1
-	SZ.TYP
+	SZ.TY3
 	MOV	R1, R5
 2$:	MOVB	(R0)+, R1
 	PUSH.B	TEXT
@@ -1075,7 +1054,6 @@ TERNAR:	EM.POP
 
 
 
-
 ;; &&, ||
 PANDOR:	CAST.B
 		; Fallthrough
@@ -1103,8 +1081,6 @@ INIPTR:	CMP	(R0)+, (R0)+
         PUSH.D	RELOCS
 	MOV	-(R0), R1	; R1: Symbol Displacement
 	BR	EMRE.E		; .EMIT; RETURN
-
-
 
 
 ;; &&
@@ -1148,7 +1124,6 @@ CUBRK:	.WORD	0		; Current point to Break target
 	BR	GOTO1
 
 ERR.19:	.ERR	19.
-
 
 
 
@@ -1233,8 +1208,7 @@ RET.K:	RETURN
 
 
 ;; R3: type
-GINI::	MOV	R3, R1
-   	SZ.TYP
+GINI::	SZ.TY3
 	MOV	R1, R5		; R5: sizeof variable
 	MOV	R3, R1
 	TY.CAT
@@ -1325,8 +1299,7 @@ GINSCT:	JSR	R0, BEGAGG
 	TST	(R4)+
 	MOV	(R4)+, R3	; R3: Field Type
 	.GINI
-	MOV	R3, R1		; R1: Field Type
-	SZ.TYP
+	SZ.TY3
 	SUB	R1, R5		; R5: remained struct bytes
 	IF.TOK	T.RBRC, ONRBRC
 	TST	(R4)
@@ -1630,7 +1603,6 @@ E.BRK:	MOV	CUBRK, R1
 	RETURN
 
 
-
 .RDATA
 
 NOTTAB:	.BYTE	BNOT$L, BNOT$I, LNOT$L, LNOT$I
@@ -1642,7 +1614,6 @@ TH.F::	.BYTE	ADD$F, SUB$F, MUL$F, DIV$F
 
 TH.SBR::.BYTE	EQ$, NE$, LT$, LEQ$, GT$, GEQ$
 TH.UBR::.BYTE	EQ$, NE$, LO$, LOS$, HI$, HIS$
-
 
 
 .END

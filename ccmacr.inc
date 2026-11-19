@@ -400,6 +400,11 @@
 	TRAP	^o175
 .ENDM	SZ.TYP
 
+;; MOV R3, R1; SZ.TYP
+.MACRO	SZ.TY3
+	TRAP	^o232
+.ENDM	SZ.TY3
+
 ;; R1: type
 ;; OUTPUT: R1: sizeof(type) aligned up to WORD
 ;; Side effect: adds this size to R2

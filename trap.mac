@@ -552,6 +552,7 @@ ALG.SZ:	SZ.TYP
 	ADD	R1, (SP)		; Add to Caller's R2
 	BR	RE.E
 
+TY3.SZ:	MOV	R3, R1
 TYP.SZ:	MOV	R1, R3
 	BMI	5$    			; L-Value is pointer-size
 	ASL	R1
@@ -1242,7 +1243,7 @@ TRAPS:	.WORD	W.REMO	, W.PUSH	, REALO.	, W.POP		, SUBRC.							; 100
 	.WORD	EMIT.	, ALG.SZ	, EXPR.		, EXT.PO	, UNRV.P	, OF.LOC	, CAT.TY	, UNWTO.	; 200
 	.WORD	STMT.	, BZ.PU		, CALLO.	, UNGE2.	, LCHR.R	, NEXTC.	, TOK.R		, B.PUSH	; 210
 	.WORD	NEXTB.	, SYM.PP	, EMIR1.	, FI.LOC	, BEQ.EM	, BNE.EM	, EXT.PU	, W.PU2		; 220
-	.WORD	SYMB.	, B.OU							 		 					; 230
+	.WORD	SYMB.	, B.OU		, TY3.SZ				 		 					; 230
 .EVEN
 
 
