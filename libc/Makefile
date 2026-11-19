@@ -1,7 +1,7 @@
 RT=RT11
 MACRO11=$(RT) MACRO
 
-C.LIB : crt0.OBJ brk.OBJ bsearc.OBJ trap.OBJ float.OBJ fread.OBJ ftoa.OBJ heap.OBJ ltoa.OBJ perror.OBJ printf.OBJ qsort.OBJ rand.OBJ rename.OBJ \
+C.LIB : CRT0.OBJ brk.OBJ bsearc.OBJ trap.OBJ float.OBJ fread.OBJ ftoa.OBJ heap.OBJ ltoa.OBJ perror.OBJ printf.OBJ qsort.OBJ rand.OBJ rename.OBJ \
 		scanf.OBJ setjmp.OBJ signal.OBJ sleep.OBJ stdio.OBJ stdlib.OBJ string.OBJ strerr.OBJ strspn.OBJ atof.OBJ strtol.OBJ time.OBJ tmpfil.OBJ
 	$(RT) LIB/CREATE C.LIB crt0,stdio,fread,string
 	$(RT) LIB/INSERT C.LIB heap,ltoa,perror,printf

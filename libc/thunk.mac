@@ -182,14 +182,6 @@ D.OFF	Z$ST
 
 
 
-;!!!R RETLNG::POP	R0, R1
-;!!!R 	ADD	(RT), SP
-;!!!R 	.NEXT
-
-
-
-
-;!!!R RETINT:	POP	R0
 D.OFF	SK$ST
 	MOV	(RT)+, R2
 	INC	R2
@@ -311,14 +303,6 @@ XOR1:	XOR	R0, (SP)
 	.NEXT
 
 
-
-
-
-;!!!? I$LOR:	TST	(SP)
-;!!!?	BEQ	LCONT
-;!!!R LSKIP:	MOV	(RT), R4
-;!!!R 	.NEXT
-
 $LOS::	BEQ	TRUE
 $LO::	BLO	TRUE
 	BR	FALSE
@@ -373,9 +357,11 @@ $BASE::
 L$SUB::	NEG	(SP)
 	ADC	2(SP)
 	NEG	2(SP)
-L$ADD::	ADD	(SP)+, 2(SP)
-	ADC	4(SP)
-	ADD	(SP)+, 2(SP)
+L$ADD::	MOV	SP, R2
+	CMP	(R2)+, (R2)+	; R2 points to the first argument
+	ADD	(SP)+, (R2)+
+	ADC	(R2)
+	ADD	(SP)+, (R2)
 	.NEXT
 
 L$AND::	COM	(SP)
@@ -433,11 +419,6 @@ I$BNOT::COM	(SP)
 
 I$NEG::	NEG	(SP)
 	.NEXT
-
-;!!!R O.LAND:	TST	(SP)
-;!!!R 	BEQ	LSKIP
-;LCONT:	TST	(SP)+
-;	BR	SKOFF
 
 
 
