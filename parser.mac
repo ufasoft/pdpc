@@ -27,7 +27,16 @@
 .GLOBL	C$WRI, I$WRI, $WRIT, $DRD, $GOTO, I$ADD, I$SUB, I$MUL, I$DIV, I$ASL, I$ASR, PU$16, P$LAD, PU$SP
 
 
-.PSECT
+.TEXT
+
+VEC.SV::MOV	(R4)+, R2
+	MOV	R4, R5.OFF(SP)
+	MOV	(R2), R0.OFF(SP)
+	CLR	(R2)+
+	MOV	(R2), PC.OFF(SP)
+	CLR	(R2)
+	POP	R2, R3
+	BR	POPR4R		; POP R4; RETURN
 
 ;; R2, R3 - subexpression types
 ;; OUTPUT: R0: Most common type of R2, R3
@@ -57,11 +66,6 @@ DEFSYM:	MOV	GSD, R5
 	MOV	TEXT+2, -(R5)
 	BIS	#150, -(R5)	; Set Global Symbol Name Entry flags: Relative Symbol definition
 	RETURN
-
-
-
-
-
 
 
 ;; Parse typed declarations and save them into Stack
@@ -145,7 +149,8 @@ FUNTYP:	PUSH	R4, R3, R2
 	MOV	R2, 2(R4)
 	BR	9$
 8$:	MOV	R2, R3
-9$:	POP	R4
+9$:
+POPR4R:	POP	R4
 	RETURN
 
 ERR.A:	.ERR
@@ -258,10 +263,7 @@ NEWLAB:	PUSH	R2
 	CLR	R1
 	LOC.OF
 	PUSH.W	LABELS
-	POP	R2
-	RETURN
-
-
+	BR	POPR2R		; POP R2; RETURN
 
 
 
@@ -422,7 +424,6 @@ PENUV:	MOV	R1, R2
 EMEUR2:	MOV	R2, R1
 EMEU:	.EMIT
 EUNA.B:	BR	EUNA.C
-
 
 
 SIZEOF:	MOV	RELOCS+2, R3
@@ -621,8 +622,6 @@ ARITH5:	MOV	R3, R1
 
 
 
-
-
 ;; Pointer arithmetics
 ;; R2: token
 ;; (R4): left type
@@ -685,9 +684,6 @@ EMRE.B:	BR	EMRE.A
 
 EMCWRI:	.EMI	C$WRI		; destination is char or unsigned char
 	RETURN
-
-
-
 
 
 
@@ -779,7 +775,6 @@ PTRDIF:	CMPB	R2, #T.SUB
 1$:	RETURN
 2$:	.EMI	I$ASR
 RET.H:	RETURN
-
 
 
 
@@ -892,7 +887,6 @@ REBIND::MFPS	R0
 	RETURN
 
 
-
 LINI::	MOV	R3, R1
 	TY.CAT
 	MOV	R2, R1
@@ -980,7 +974,6 @@ LINARR:	IF.TOK	T.LSTR, LINSTR
 	BR	REBIN8
 
 
-
 LDEF:	T.DCL			; R1: offset in SYMBS, R2: actual type
 	PUSH.D	LOCALS
 	MOV	R2, R3		;!!!?
@@ -1005,7 +998,6 @@ TOKVA3::.WORD	0
 	.EMIT
 	BR	EMLNG2
 .ENDC ; C$DBL
-
 
 
 
@@ -1177,10 +1169,6 @@ BIN11:	CMP	SP, TSTKB
 	default
 	CALL	GENBIN
 PBIN.A:	BR	PBINA4
-
-
-
-
 
 
 

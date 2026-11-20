@@ -116,8 +116,7 @@ ungetc::
 	BIS	R4, (R2)+
 	SUB	#1, (R2)+	; FILE.pos--
 	SBC	(R2)
-9$:
-CRET.C:	RETURN
+9$:	RETURN
 
 
 ;; void rewind(FILE *stream)

@@ -14,13 +14,6 @@
 
 .TEXT
 
-; R2.OFF	= 0	; to avoid explicit 0
-R3.OFF	= 2
-R4.OFF	= 4
-R5.OFF	= 6
-R0.OFF	= 10
-PC.OFF	= 12
-ST.OFF	= 14	; First Word Before Stack Frame ;   Number Of Saved Bytes In Stack Frame
 
 .IF NE C$CC
 
@@ -31,17 +24,9 @@ ST.OFF	= 14	; First Word Before Stack Frame ;   Number Of Saved Bytes In Stack F
 .GLOBL	LOCALS, ASCII, TMP2RA, TOKR
 .GLOBL	PBINAR, TSTKB, EXTYPE, SV.ASC, GDEF, SYMBS, $READ, I$RD, $I2L, DEFGSD, GSD
 .GLOBL	TDECLS, IS.CE, GINI, TYPES, GINI, LINI
-.GLOBL	EXPR., RCH, CHR.R, RESV10
+.GLOBL	EXPR., RCH, CHR.R, RESV10, VEC.SV
 
 
-VEC.SV:	MOV	(R4)+, R2
-	MOV	R4, R5.OFF(SP)
-	MOV	(R2), R0.OFF(SP)
-	CLR	(R2)+
-	MOV	(R2), PC.OFF(SP)
-	CLR	(R2)
-	POP	R2, R3, R4
-	RETURN
 
 ;; Invalid opcode ISR (vector 10)
 I.INVO::PUSH	R1
@@ -728,12 +713,12 @@ VEC.RE:	MOV	(R4)+, R5
 	MOV	(R5), R1
 	.free
 	MOV	SP, R1
-	ADD	#14, R1
+	MOV	#14, R0
+	ADD	R0, R1
 	MOV	R1, R2
 	MOV	(R1)+, (R5)+
 	MOV	(R1)+, (R5)+
-	MOV	#6, R0
-1$:	MOV	-(R2), -(R1)
+1$:	MOVB	-(R2), -(R1)
 	SOB	R0, 1$
 	MOV	R1, SP
 RE4.G:	BR	RE4.F
@@ -756,7 +741,7 @@ FIN.OU:	MOV	OBJSTM, R1
 	.fseek			; seek back
 	MOV	(PC)+, R3
 OUCSUM:	.WORD	0		; .OBJ section checksum
-	CALL	OUBYTE
+	OU.B
 	CLR	(PC)+
 OULEN:	.WORD	0
 	CLR	OUCSUM

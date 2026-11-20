@@ -252,6 +252,16 @@ RC = %7		; C calling convention register. !!!Change to %7
 FP = %4
 RT = %5
 
+;; Stored register offsets in TRAP handlers
+; R2.OFF	= 0	; to avoid explicit 0
+R3.OFF	= 2
+R4.OFF	= 4
+R5.OFF	= 6
+R0.OFF	= 10
+PC.OFF	= 12
+ST.OFF	= 14	; First Word Before Stack Frame ;   Number Of Saved Bytes In Stack Frame
+
+
 .MACRO	.NEXT
 	JMP	@(RT)+
 .ENDM	.NEXT
