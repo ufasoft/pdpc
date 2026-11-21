@@ -1308,7 +1308,7 @@ GINARR: IF.TOK	T.LSTR, GINSTR
 	MOV	R1, R3		; R3: Element Type
 	SZ.TYP
 	MOV	R1, R4		; R4: element size
-	CMP	R4, #1
+	DEC	R1
 	BNE	5$
 	IF.TOK	T.LSTR, GIBSTR
 5$:	CLR	R2		; R2: #elements

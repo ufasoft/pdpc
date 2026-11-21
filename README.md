@@ -2,7 +2,7 @@
 
 ## Developer's Manual
 
-**Version:** 2026.0
+**Version:** 2026.6
 
 This is a minimal compiler for [PDP-11](https://en.wikipedia.org/wiki/PDP-11) computers family, implementing subset of [ANSI C](https://en.wikipedia.org/wiki/ANSI_C) (C89) standard.
 
@@ -51,7 +51,7 @@ Options:
 ## Predefined preprocessor macros
 
 - `__pdp11__ = 40` (as PDP-11/40 was the model supporting both EIS and FIS instruction sets).
-- `_PDPC = 20260` (encoded version number)
+- `_PDPC = 20266` (encoded version number)
 - `__DATE__`
 - `__FILE__`
 - `__LINE__`

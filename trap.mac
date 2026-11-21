@@ -1248,14 +1248,17 @@ SUBRS:	.WORD	strlen		, strcmp	, strcpy	, isspace								; 300
 TYSZ:	.BYTE	2, 2, 2, 1, 2, 4, 4	; sizeof(sym, , unk, char, int, long, float)
 .IIF NE C$DBL	.BYTE 8.
 
+ERRSTR:
 MSGAT:	.ASCIZ	"Error C%d at %s:%d"<C.NL>
 
-.ENDC	; C$CC
+.IFF
 
 .RDATA
 
 ERRSTR:	.ASCIZ	"Error C"
-STKOVF:	.ASCIZ	"Stack overflow"
 
+.ENDC	; C$CC
+
+STKOVF:	.ASCIZ	"Stack overflow"
 
 .END
