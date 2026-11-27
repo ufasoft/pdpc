@@ -1241,7 +1241,7 @@ SUBRS:	.WORD	strlen		, strcmp	, strcpy	, isspace								; 300
 	.WORD	isalnum															; 330
 .IF NE C$CC
 	.WORD			strcat		, GINI		, LINI									; 330
-	.WORD	PUNARY		, fopen													; 340
+	.WORD	PUNARY		, fopen		, isalpha										; 340
 
 .RDATA
 

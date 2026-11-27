@@ -580,6 +580,10 @@
 .ENDM	.EMSYM
 
 
+.MACRO	.strcat
+	TRAP	^o332
+.ENDM	.strcat
+
 
 
 
@@ -588,9 +592,10 @@
 .ENDM	.fopen
 
 
-.MACRO	.strcat
-	TRAP	^o332
-.ENDM	.strcat
+.MACRO	.isalpha
+	TRAP	^o344
+.ENDM	.isalpha
+
 
 
 

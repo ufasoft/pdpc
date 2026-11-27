@@ -9,7 +9,9 @@
 .INCLUDE /ccmacr.inc/
 
 .GLOBL	TEXT, IS.OPE, BNDARG, NARGS, RTOK, ASCII, BINDS, TMP, MEMSTM, EXPANS, REBIND, CURARG
-.GLOBL	INTOK, $PABOR, RE, $PRSNL, FLSLV
+.GLOBL	INTOK, $PABOR, RE, $PRSNL, FLSLV, PACHR1, PACHR2
+.GLOBL	MEMSTM, TMP2RA, VAARGS, CURARG, NSLINE, NX.TOK, TOKVA0, TOKVA1, INTOK, RCH, NO.EXP
+
 
 
 .TEXT
@@ -65,49 +67,50 @@ PPCUR::	.WORD	LINE
 	RETURN
 
 
-;; #define
-DEFINE: MOV	#TMP+2, R3
-	MOV	#2, (R3)	; TMP+2 = 2
-	PP.SYM
-	PUSH.S	TMP
-	CLR	R4		; Count of args (-1: Parameterless macro)
-	MOV	(R3), R5	; offset to arg count
-	INC	(R3)		; Skip space for arg count
-	IF.CHR	'(, 3$
-	DEC	R4
-;; Copy definition
-2$:	R.LCHR
-	BEQ	1$
-	.isspace
-	BNE	2$
-	BR	1$
-6$:	R.LCHR
-1$:	PUSH.B	TMP
-	BNE	6$
-	ADD	-(R3), R5	; R5 += TMP: address of arg count
-	MOVB	R4, (R5)	; Save arg count
-	MOV	TMP, R1
-	MOV	TMP+2, R2
-	.REALLOC
-	CALL	TMP2R1
-	MOV	PPCUR, (R1)	; Insert into PPCUR linked list
-	MOV	R1, PPCUR
-	POP	IS.OPE
-	BR	SKRES2
-7$:	MOV	#VAARGS, R1
-	BR	5$
-4$:	MOV	ASCII, R1
-5$:	INC	R4
-	PUSH.S	TMP
-	IF.TOK	T.RPAR, 2$
-	CK.TOK	T.COMM
-3$:	G.TOK
-	switch
-	case	T.SYM	, 4$
-	case	T.RPAR	, 2$
-	case	T.3DOT	, 7$
-	default
-ERR.A:	.ERR
+ENDIF:	TST	(R3)		; TST FLSLV. CF=0
+	BEQ	2$		; Active level
+	INC	(R3)		; INC FLSLV
+	BNE	SKRE.C
+	ROR	(R5)		; Equivalent of TST (R5)
+2$:	ROL	(R5)		; ASL CNDMSK
+	BR	IFT.1
+
+
+;; R1[0]:0 #ifndef
+;; R1[0]:1 #ifdef
+IFDEF:	TST	(R4)		; TST CNDMOD
+	BNE	IF.A		; Inactive, increment nested level
+	MOV	R1, R5
+	CALL	FISYM		;!!!O?  .SUBR FISYM
+	ADC	R5		; Low bit of R5 = R5 ^ CF
+	ROR	R5
+IF2:	ROR	(PC)+
+CNDMSK:	.WORD	0		;SELF-MOD Condition results. Bit 15 is current.  0: true, 1: false
+IFT.1:	SXT	(PC)+
+CNDMOD:	.WORD	0		;SELF-MOD bool, Current condition state. 0: true, non 0: false
+SKRE.C:	BR	SKRE.D
+
+
+;; #elif
+ELIF:	TST	(R5)		; TST CNDMSK
+	BPL	FALS		; after active part
+	ASL	(R5)		; ASL CNDMSK
+IF1:	PUSH	#IF2
+;; Eval integer constant expression in #if
+;; Returns: CF=0 on true
+;;!!! Similar code in CIE.EV
+;!!!R	MOV	#TEXT+2, R5
+;!!!R	PUSH	(R5)		; Save TEXT size
+	INC	NSLINE		;!!!?
+	CLRB	NO.EXP
+	EV.CIE
+
+;!!!?	CLRB	IS.PP
+
+	BEQ	SEC.RE		; SEC; RETURN
+CLC.RE:	CLC
+	RETURN
+
 
 
 
@@ -137,7 +140,7 @@ PPDIR:: PUSH	(R3)		; PUSH IS.OPE
 	MOV	SYNAM0, R1
 	F.WORD
 	.RAD50	"ifn""ifd""def""und""if ""els""eli""end""inc""err"<0>
-	BCC	SKREST		; Unknown directive
+	BCC	SKRE.D		; Unknown directive
 	MOV	#FLSLV, R3
 	MOV	#CNDMSK, R5
 	switch
@@ -153,7 +156,7 @@ PPDIR:: PUSH	(R3)		; PUSH IS.OPE
 	case	$ELIF	, ELIF
 	default
 	TST	(R4)		; TST CNDMOD
-	BNE	SKREST		; Skip rest of line if the Condition is False
+	BNE	SKRE.D		; Skip rest of line if the Condition is False
 	switch
 	case	$DEFINE	, DEFINE
 	case	$UNDEF	, UNDEF
@@ -172,201 +175,6 @@ PERR:	DEC	ASCII + 2	; Clear terminating '\0'
 	MOV	ASCII, R1
 	CALL	$PRSNL		; .fputs; MOV #C.NL, R1; .fputc
 	.ERR	3
-
-ERREXI::JMP	$PABOR		; To prevent closing .OBJ file. It should be removed
-
-ENDIF:	TST	(R3)		; TST FLSLV. CF=0
-	BEQ	2$		; Active level
-	INC	(R3)		; INC FLSLV
-	BNE	SKREST
-	ROR	(R5)		; Equivalent of TST (R5)
-2$:	ROL	(R5)		; ASL CNDMSK
-	BR	IFT.1
-
-
-
-;; #else
-ELSE:	CLR	(R4)		; CNDMOD = True
-   	TST	(R5)		; TST CNDMSK
-	BMI	SKREST
-FALS:	DEC	(R3)		; Don't consider following `else`s or `elif`s
-	ASL	(R5)		; ASL CNDMSK
-	MOV	SP, (R4)	; CNDMOD = False
-;; Skip rest of line
-SKREST:	POP	IS.OPE
-SKRES1:	R.LCHR			; Return from a Directive
-	BNE	SKRES1
-SKRES2:	CLR	NSLINE
-	CLR	(PC)+
-NO.EXP::.BYTE	0		; Expansion disabled
-IS.PP::	.BYTE	0		; Preprocessor Mode ON (limited expressions)
-TOKR::	.CLEAR	ASCII
-	MOV	#ASCII+2, R5
-	ASR	(PC)+
-HAS.TO::.WORD	0		; Flag we have next token
-	BCC	HASTO1
-	MOV	(PC)+, -(R5)	; MOV	SV.ASC, ASCII
-SV.ASC::.WORD	0		; ASCII of previous token
-	MOV	(PC)+, R1
-NX.TOK::.WORD	0		; Next token
-	RETURN
-HASTO1:	TST	(PC)+
-NSLINE::.WORD	0		; Non-space Line
-	BNE	J.RTOK
-	CLR	INTOK
-TOKR2:	MOV	#IS.OPE, R3
-	R.CHR
-	BEQ	RE.TSP
-	MOV	#CNDMOD, R4
-	switch
-	case	C.NL	, RE.TSN
-	case	'#	, PPDIR
-	default
-	.isspace
-	BNE	TOKR2
-	INC	NSLINE
-	TST	(R4)		; TST CNDMOD
-	BNE	SKRES1		; Skip rest of line
-	.UNGET
-	TST	(R3)		; TST IS.OPE
-	BEQ	J.RTOK
-	TST	(R5)		; TST ASCII+2
-	BNE	RETSP1
-J.RTOK:	JMP	RTOK		;!!!O
-RE.TSN:	TSTB	IS.PP
-	BEQ	TOKR2
-	.UNGET		;!!!?
-CLRR1R:	CLR	R1
-	RETURN
-RE.TSP:	TST	(R3)		; TST IS.OPE
-	BEQ	RET.D
-	TST	(R5)		; CLR ASCII+2
-	BEQ	RET.D
-	TSTB	@-(R5)
-	BEQ	RET.D		; TSTB @ASCII
-RETSP1:	PU.BZ	ASCII
-	MOV	#T.SP, R1
-RET.D:	RETURN
-
-INCLUDE:CLRB	NO.EXP
-	IF.TOK	T.LSTR, 3$
-	CK.TOK	T.LT
-	CLR	TMP+2
-1$:	R.LCHR
-	BEQ	ERR.O
-	CMPB	R1, #'>
-	BEQ	2$
-	PUSH.B	TMP
-	BR	1$
-2$:	PU.BZ	TMP
-3$:	CALL	OPNTMP
-	BNE	8$
-	PUSH	R1
-	MOV	#SYDEV, R1
-	PUSH.S	TMP
-	DEC	TMP+2
-	MOV	(SP), R1
-	PUSH.S	TMP
-	POP	R1
-	.free
-	CALL	OPNTMP
-	BEQ	ERREXI
-8$:	POP	IS.OPE
-	BR	SKRES2
-
-
-
-;; R1[0]:0 #ifndef
-;; R1[0]:1 #ifdef
-IFDEF:	TST	(R4)		; TST CNDMOD
-	BNE	IF.A		; Inactive, increment nested level
-	MOV	R1, R5
-	CALL	FISYM		;!!!O?  .SUBR FISYM
-	ADC	R5		; Low bit of R5 = R5 ^ CF
-	ROR	R5
-IF2:	ROR	(PC)+
-CNDMSK:	.WORD	0		;SELF-MOD Condition results. Bit 15 is current.  0: true, 1: false
-IFT.1:	SXT	(PC)+
-CNDMOD:	.WORD	0		;SELF-MOD bool, Current condition state. 0: true, non 0: false
-SKRE.C:	BR	SKREST
-
-
-
-;; #elif
-ELIF:	TST	(R5)		; TST CNDMSK
-	BPL	FALS		; after active part
-	ASL	(R5)		; ASL CNDMSK
-IF1:	PUSH	#IF2
-;; Eval integer constant expression in #if
-;; Returns: CF=0 on true
-;;!!! Similar code in CIE.EV
-;!!!R	MOV	#TEXT+2, R5
-;!!!R	PUSH	(R5)		; Save TEXT size
-	INC	NSLINE		;!!!?
-	CLRB	NO.EXP
-	EV.CIE
-
-;!!!?	CLRB	IS.PP
-
-	BEQ	SEC.RE		; SEC; RETURN
-CLC.RE:	CLC
-	RETURN
-
-
-CHR.R::	PUSH	#RE
-;; Read char, converts comments to space
-NEXTD::	MOV	#'/, R0
-NEXTB::	.NEXTC
-	BEQ	RET.E
-	TST	MEMSTM
-	BNE	NEXTB9		; defines are free from comments
-	CMPB	R1, R0
-	BNE	NEXTB9
-	TST	(PC)+
-INTOK::	.WORD	0		; In process of Token reading after first char is read
-	BEQ	1$
-	.UNGE2
-	BR	CLRR1R		; CLR R1; RETURN
-1$:	.NEXTC
-	switch
-	case	'/	, 6$
-	case	'*	, 7$
-	default
-	.UNGET
-	MOV	R0, R1		; R1: '/
-	BR	NEXTB9
-6$:	.NEXTC
-	BEQ	NEXTB9
-	CMP	R1, #C.NL
-	BNE	6$
-	BR	NEXTB9
-
-7$:	.NEXTC			; Skip comment
-8$:	CMPB	R1, #'*
-	BNE	7$
-	.NEXTC			; Skip comment
-	CMPB	R1, #'/
-	BNE	8$
-	MOV	#C.SP, R1	; Return comment as SP
-NEXTB9:	PUSH.B	ASCII
-RET.E:	RETURN
-
-
-;; #undef
-UNDEF:	CALL	FISYM
-	BCC	SKRE.C
-	MOV	-(R1), (R3)	; Unlink
-	.free
-	BR	SKRE.C
-
-
-;; #if cond
-PIF:	TST	(R4)		; TST CNDMOD
-	BEQ	IF1		; Nesting Level 1
-IF.A:	DEC	(R3)		; DEC FLSLV
-	BMI	SKRE.C
-ERR.O:	.ERR
-
 
 ;; Find symbol
 ;; Returns:
@@ -408,6 +216,429 @@ TYOREX::.TYPEP
 	CK.TOK	T.RPAR
 	MOV	R2, R1
 	BR	SEC.RE
+
+
+;; #if cond
+PIF:	TST	(R4)		; TST CNDMOD
+	BEQ	IF1		; Nesting Level 1
+IF.A:	DEC	(R3)		; DEC FLSLV
+	BMI	SKRE.D
+ERR.O:	.ERR
+
+
+
+;; #else
+ELSE:	CLR	(R4)		; CNDMOD = True
+   	TST	(R5)		; TST CNDMSK
+	BMI	SKREST
+FALS:	DEC	(R3)		; Don't consider following `else`s or `elif`s
+	ASL	(R5)		; ASL CNDMSK
+	MOV	SP, (R4)	; CNDMOD = False
+SKRE.D:	BR	SKREST
+
+
+;; #define
+DEFINE: MOV	#TMP+2, R3
+	MOV	#2, (R3)	; TMP+2 = 2
+	PP.SYM
+	PUSH.S	TMP
+	CLR	R4		; Count of args (-1: Parameterless macro)
+	MOV	(R3), R5	; offset to arg count
+	INC	(R3)		; Skip space for arg count
+	IF.CHR	'(, DEFPAR
+	DEC	R4
+;; Copy definition
+DEFPA2:	R.LCHR
+	BEQ	1$
+	.isspace
+	BNE	DEFPA2
+	BR	1$
+6$:	R.LCHR
+1$:	PUSH.B	TMP
+	BNE	6$
+	ADD	-(R3), R5	; R5 += TMP: address of arg count
+	MOVB	R4, (R5)	; Save arg count
+	MOV	TMP, R1
+	MOV	TMP+2, R2
+	.REALLOC
+	CALL	TMP2R1
+	MOV	PPCUR, (R1)	; Insert into PPCUR linked list
+	MOV	R1, PPCUR
+POSKRE:	POP	IS.OPE
+	BR	SKRES2
+DEFPA7:	MOV	#VAARGS, R1
+	BR	DEFPA5
+DEFPA4:	MOV	ASCII, R1
+DEFPA5:	INC	R4
+	PUSH.S	TMP
+	IF.TOK	T.RPAR, DEFPA2
+	CK.TOK	T.COMM
+DEFPAR:	G.TOK
+	switch
+	case	T.SYM	, DEFPA4
+	case	T.RPAR	, DEFPA2
+	case	T.3DOT	, DEFPA7
+	default
+ERR.A:	.ERR
+
+
+
+;; #undef
+UNDEF:	CALL	FISYM
+	BCC	SKREST
+	MOV	-(R1), (R3)	; Unlink
+	.free
+;; Skip rest of line
+SKREST:	POP	IS.OPE
+SKRES1:	R.LCHR			; Return from a Directive
+	BNE	SKRES1
+SKRES2:	CLR	NSLINE
+	CLR	(PC)+
+NO.EXP::.BYTE	0		; Expansion disabled
+IS.PP::	.BYTE	0		; Preprocessor Mode ON (limited expressions)
+TOKR::	.CLEAR	ASCII
+	MOV	#ASCII+2, R5
+	ASR	(PC)+
+HAS.TO::.WORD	0		; Flag we have next token
+	BCC	HASTO1
+	MOV	(PC)+, -(R5)	; MOV	SV.ASC, ASCII
+SV.ASC::.WORD	0		; ASCII of previous token
+	MOV	(PC)+, R1
+NX.TOK::.WORD	0		; Next token
+	RETURN
+
+
+INCLUDE:CLRB	NO.EXP
+	IF.TOK	T.LSTR, 3$
+	CK.TOK	T.LT
+	CLR	TMP+2
+1$:	R.LCHR
+	BEQ	ERR.O
+	CMPB	R1, #'>
+	BEQ	2$
+	PUSH.B	TMP
+	BR	1$
+2$:	PU.BZ	TMP
+3$:	CALL	OPNTMP
+	BNE	POSKRE
+	PUSH	R1
+	MOV	#SYDEV, R1
+	PUSH.S	TMP
+	DEC	TMP+2
+	MOV	(SP), R1
+	PUSH.S	TMP
+	POP	R1
+	.free
+	CALL	OPNTMP
+	BNE	POSKRE		; POP IS.OPE; BR SKRES2
+ERREXI::JMP	$PABOR		; To prevent closing .OBJ file. It should be removed
+
+
+
+
+
+
+
+
+
+
+
+HASTO1:	TST	(PC)+
+NSLINE::.WORD	0		; Non-space Line
+	BNE	J.RTOK
+	CLR	INTOK
+TOKR2:	MOV	#IS.OPE, R3
+	R.CHR
+	BEQ	RE.TSP
+	MOV	#CNDMOD, R4
+	switch
+	case	C.NL	, RE.TSN
+	case	'#	, PPDIR
+	default
+	.isspace
+	BNE	TOKR2
+	INC	NSLINE
+	TST	(R4)		; TST CNDMOD
+	BNE	SKRES1		; Skip rest of line
+	.UNGET
+	TST	(R3)		; TST IS.OPE
+	BEQ	J.RTOK
+	TST	(R5)		; TST ASCII+2
+	BNE	RETSP1
+J.RTOK:	BR	RTOK
+RE.TSN:	TSTB	IS.PP
+	BEQ	TOKR2
+	.UNGET		;!!!?
+CLRR1R:	CLR	R1
+	RETURN
+RE.TSP:	TST	(R3)		; TST IS.OPE
+	BEQ	RET.D
+	TST	(R5)		; CLR ASCII+2
+	BEQ	RET.D
+	TSTB	@-(R5)
+	BEQ	RET.D		; TSTB @ASCII
+RETSP1:	PU.BZ	ASCII
+	MOV	#T.SP, R1
+RET.D:	RETURN
+
+
+
+
+CHR.R::	PUSH	#RE
+;; Read char, converts comments to space
+NEXTD::	MOV	#'/, R0
+NEXTB::	.NEXTC
+	BEQ	RET.E
+	TST	MEMSTM
+	BNE	NEXTB9		; defines are free from comments
+	CMPB	R1, R0
+	BNE	NEXTB9
+	TST	(PC)+
+INTOK::	.WORD	0		; In process of Token reading after first char is read
+	BEQ	1$
+	.UNGE2
+	BR	CLRR1R		; CLR R1; RETURN
+1$:	.NEXTC
+	switch
+	case	'/	, 6$
+	case	'*	, 7$
+	default
+	.UNGET
+	MOV	R0, R1		; R1: '/
+	BR	NEXTB9
+6$:	.NEXTC
+	BEQ	NEXTB9
+	CMP	R1, #C.NL
+	BNE	6$
+	BR	NEXTB9
+
+7$:	.NEXTC			; Skip comment
+8$:	CMPB	R1, #'*
+	BNE	7$
+	.NEXTC			; Skip comment
+	CMPB	R1, #'/
+	BNE	8$
+	MOV	#C.SP, R1	; Return comment as SP
+NEXTB9:	PUSH.B	ASCII
+RET.E:	RETURN
+
+PACHR:	PUSH	R1		; PUSH #T.LINT
+	CALL	PACHR1
+	MOV	R1, TOKVA0
+	.NEXTB
+	switch
+	case	'', PAID
+	default
+	.ERR	13.
+
+
+
+RTOKSP: CMP	R1, #C.NL
+	BNE	1$
+;!!!?	CLR	NSLINE
+	TSTB	IS.PP
+	BNE	RTOK8
+1$:	MOV	#T.SP, R1
+	TST	(PC)+
+IS.OPE::.WORD	0		; Option -E
+	BNE	PARE
+RTOK::	CLR	ASCII + 2
+	CLR	INTOK
+	CALL	RCH
+	BCC	RTOK9
+	BNE	RTOKSP		; Skip Whitespace
+	MOV	SP, INTOK
+	MOVB	R1, R2
+	MOV	#$SCRAT, R3
+	switch
+	case	'_	, RSYM
+	case	''	, PACHR
+	case	'"	, PASTR
+	case	'.	, PADOT
+	case	'#	, PSHARP
+	default
+	.isalpha
+	BEQ	NRSYM
+RSYM:	MOVB	R1, (R3)+
+	CMP	#$SCRAT+15, R3
+	SBC	R3		; Prevent writing behind $SCRAT buffer
+	R.CHR
+	.isalnum
+	BNE	RSYM
+	CMPB	R1, #'_
+	BEQ	RSYM
+	CLRB	(R3)+
+	.UNGET
+	A.R50
+	TSTB	NO.EXP
+	BNE	RSYM2
+	CALL	TRYEXP
+	BNE	RTOK
+RSYM2:	PUSH	#T.SYM
+	TSTB	IS.PP
+	BNE	PAID
+	F.DWORD
+	.RAD50	"enum  ""struct""union ""char  ""const ""contin""defaul""do    "
+	.RAD50	"double""else  ""auto  ""extern""float ""for   ""goto  ""if    ""inline"
+	.RAD50	"int   ""long  ""regist""return""short ""signed""sizeof""static""break "
+	.RAD50	"switch""typede""case  ""unsign""void  ""volati""while "
+	.WORD	0
+	BCC	PAID
+	INC	R1		; T.AUTO == 1
+	TST	(SP)+
+PARE:	PUSH	R1		; End of Token
+PAID:	PU.BZ	ASCII
+	POP	R1
+	BR	RTOK9		; Preprocessor reads tokens until EOL
+RTOK8:	.UNGET
+	CLR	R1
+RTOK9:	MOV	R1, NX.TOK
+	RETURN
+
+
+
+
+
+NRSYM:	.isdigit
+	BNE	PANUM
+	R.CHR
+	SWAB	R1
+	BISB	R2, R1
+	F.WORD			; Long Tokens
+	.WORD	"<<, ">>, "++, "--, "&&, "||, "+=, "-=, "*=, "/=, "%=, "&=, "|=, "^=, "==, "!=, "<=, ">=, "->, 0
+	BCS	NRSY1
+;; R2: char
+RTOK4:	SWAB	R1
+RTOK5:	.UNGET
+RTOK6:	MOV	#TOKCH1, R1
+	CALL	strchr
+	BEQ	ERR.13
+	CMP	R0, #TOKCH2
+	BLO	1$
+	ASL	R0
+	MOV	TOKS1-<TOKCH2*2>(R0), R2
+1$:	MOV	R2, R1
+	BR	PARE
+
+NRSY1:	DEC	R1
+	BGT	5$
+	IF.CHR	'=, 7$		; <<= or >>=
+5$:	ASL	R1
+	MOV	TOKS2+2(R1), R1
+7$:	ADD	#T.LSHA+1, R1
+PARE.B:	BR	PARE
+
+
+
+
+
+PANUM:	CLR	R2		; Is Float flag
+	MOV	#TOKTYP, R4
+	MOVB	#T.LINT, (R4)
+	MOV	#10., R5	; R5: base
+	CMPB	R1, #'0
+	BNE	PANU1
+	TST	-(R5)		; R5: 8.
+	R.CHR
+	switch
+	case	'X	, PAHEX
+	case	'x	, PAHEX
+	default
+	BR	PANU7
+
+
+
+
+PASTR:	PUSH	R1		; PUSH #T.LSTR
+	CLR	TMP + 2		; Clear previous token
+1$:	.NEXTB
+	switch
+	case	'"	, PAID
+	default
+	CALL	PACHR2
+	PUSH.B	TMP
+	BR	1$
+
+PSHARP:	IF.CHR	'#, PSHSH
+RTOK2.B:RETURN
+PSHSH:	INC	R1		; R1: T.SHSH
+	RETURN
+
+
+
+;!!!R PADEC:  MOV	#10., R5
+PAINT5:	MOV	R5, R3
+PAINT::	CLR	R2
+	CLR	R0
+	CALL	strtol
+PAINT6:	MOV	R0, TOKVA0
+	MOV	R1, TOKVA1
+	MOVB	(PC)+, R1
+TOKTYP::.WORD	0
+	BR	PARE.B
+
+PADOT1:	PUSH	#T.3DOT
+	IF.CHR	'., PAID
+ERR.13:	.ERR	13.
+
+PADOT:	R.CHR
+	BEQ	RTOK6
+	switch
+	case	'., PADOT1
+	default
+	.isdigit
+	BEQ	RTOK5
+	.UNGET
+	MOV	#TOKTYP, R4	; R2: '. here (Float flag)
+	BR	PANU1
+
+
+
+
+
+;!!!R PAOCT:	MOV	#8., R3
+;!!!R 	BR	PAINT
+
+PAHEX:	ASL	R5		; R5: 16.
+	BR	PANU2
+
+
+PANU3:	CMP	R5, #16.
+	BEQ	PANU1
+	MOVB	R1, (R3)+
+	G.CHR
+PANU4:	INC	R2		; Set Float flag
+PANU1:	MOVB	R1, (R3)+
+PANU2:	R.CHR
+PANU7:	switch
+	case	0	, PANU8
+	case	'.	, PANU4
+	case	'E	, PANU3
+	case	'e	, PANU3
+	case	'L	, PANUL
+	case	'l	, PANUL
+	case	'U	, PANU8
+	case	'u	, PANU8
+	default
+	.SUBRC	isxdigit
+	BNE	PANU1
+	.UNGET
+PANU8:	CLRB	(R3)+
+	MOV	#$SCRAT, R1
+	TST	R2
+	BEQ	PAINT5		; Integer, R5: radix
+	MOVB	#T.LFLT, (R4)	; TOKTYP
+	CALL	atof
+	BR	PAINT6
+PANUL:	IF.CHR	'L, 1$		; LL suffix
+	IF.CHR	'l, 1$
+1$:	DECB	(R4)		; TOKTYP: T.LLNG
+	BR	PANU8
+
+
+
+
+
 
 ;; Open InputFile with filename in TMP
 OPNTMP:	CALL	TMP2R1
@@ -471,7 +702,7 @@ EXPAND::
 	BR	7$
 5$:	PP.SYM
 	CALL	EXPARG
-	BEQ	ERR.O
+	BEQ	ERR.13
 	MOV	#'", R1
 6$:	PUSH.B	EXPANS
 	MOVB	(R3)+, R1
@@ -773,9 +1004,45 @@ NEXTCH::MOV	MEMSTM, R4
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 .RADAT
 
 .EVEN
+
+;; 1-char tokens
+TOKS1:	.WORD	T.LNOT	; !
+	.WORD	T.MOD	; %
+	.WORD	T.AND	; &
+	.WORD	T.AST	; *
+	.WORD	T.ADD	; +
+	.WORD	T.SUB	; -
+	.WORD	T.DIV	; /
+	.WORD	T.LT	; <
+	.WORD	T.ASGN	; =
+	.WORD	T.GT	; >
+	.WORD	T.TERN	; ?
+	.WORD	T.XOR	; ^
+	.WORD	T.OR	; |
+
+
+;; Multi-char tokens
+T2OFF	= T.LSHA+1
+TOKS2:	.WORD	T.LSH-T2OFF	, T.RSH-T2OFF	, T.INCR-T2OFF	, T.DECR-T2OFF	, T.LAND-T2OFF	, T.LOR-T2OFF	, T.ADDA-T2OFF	, T.SUBA-T2OFF
+	.WORD	T.MULA-T2OFF	, T.DIVA -T2OFF	, T.REMA-T2OFF	, T.ANDA-T2OFF	, T.ORA-T2OFF	, T.XORA-T2OFF	, T.EQ-T2OFF	, T.NE-T2OFF
+	.WORD	T.LTEQ-T2OFF	, T.GTEQ-T2OFF	, T.ARRO-T2OFF
+
 
 ;; Predefined preprocessor symbols
 ;;  __pdp11__
@@ -796,6 +1063,11 @@ LINE:	.WORD	FILE
 	.ASCIZ	"__LINE__"
 
 .RDATA
+
+;--  Must be adjacent. Used in RTOK4
+TOKCH1:	.ASCII	"~.,:;()[]{}"		; Token with value equal to ASCII code
+TOKCH2:	.ASCIZ	"!%&*+-/<=>?^|"
+;--
 
 RMODE:	.ASCIZ	"r"
 
