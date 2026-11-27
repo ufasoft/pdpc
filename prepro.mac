@@ -248,7 +248,6 @@ DEFINE: MOV	#TMP+2, R3
 	DEC	R4
 ;; Copy definition
 DEFPA2:	R.LCHR
-	BEQ	1$
 	.isspace
 	BNE	DEFPA2
 	BR	1$
@@ -633,9 +632,6 @@ PANUL:	IF.CHR	'L, 1$		; LL suffix
 	IF.CHR	'l, 1$
 1$:	DECB	(R4)		; TOKTYP: T.LLNG
 	BR	PANU8
-
-
-
 
 
 

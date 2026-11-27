@@ -7,7 +7,7 @@
 
 .INCLUDE /macros.inc/
 
-.PSECT	.text
+.TEXT
 
 QSORT1:
 	PUSH	R2		; (SP): count - 1
@@ -47,10 +47,8 @@ QSORT1:
 			; Tail call
 ;; void qsort(void* ptr, size_t count, size_t size, int (*comp)(const void*, const void*))
 qsort::
-	DEC	R2
-	BGT	QSORT1
+	SOB	R2, QSORT1
 	RETURN           	; Sorted already
 
 
 .END
-
