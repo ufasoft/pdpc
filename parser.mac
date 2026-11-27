@@ -282,9 +282,7 @@ LPAR:	CALL	TYOREX
 	BCC	EUNA.A
 			; Fallthrough
 ;; R1: target type
-CAST:	MOV	R1, R5
-	.UNARY
-	MOV	R5, R1
+CAST:	.UNARY
 	.CAST
 	RETURN
 
@@ -498,6 +496,7 @@ DOT:	G.SYMB
 ;; Parge unary argument
 PUNARY::G.TOK
 	MOV	#T.ADD&177, R2		; Used in INCR
+	MOV	#TY.FLT, R5
 	switch
 	case	T.AST	, DEREF		; *
 	case	T.INCR	, INCR		; ++
@@ -505,30 +504,26 @@ PUNARY::G.TOK
 	case	T.LPAR	, LPAR
 	case	T.ADD	, PUNARY	; +
 	case	T.AND	, ADDROF	; &
-.IIF NE C$DBL	case	T.LDBL	, EMDBL
 	case	T.LINT	, EMINT		; int literal
 	case	T.SIZE	, SIZEOF
 	case	T.LSTR	, EMISTR	; string literal
 	case	T.NOT	, BNOT		; ~
 	case	T.SUB	, PNEG		; -
 	case	T.LNOT	, LNOT		; !
-	case	T.LFLT	, EMFLT		; float literal
+	case	T.LFLT	, EMLNG1	; float literal
+.IIF NE C$DBL	case	T.LDBL	, EMDBL
 	case	T.LLNG	, EMLNG		; long literal
 	case	T.SYM	, EMSYM
 	default
 ERR.F:	.ERR
 
 
-EMFLT:	MOV	#TY.FLT, R5
-	BR	EMLNG1
-
-EMLNG:	MOV	#TY.L, R5
+EMLNG:	CMPB	-(R5), -(R5)		; R5: #TY.L
 EMLNG1:	.EMI	PU$32
 EMLNG2:	MOV	(PC)+, R1
 TOKVA1::.WORD	0
 	.EMIT
 	BR	EM.SCR
-
 
 
 
@@ -984,7 +979,7 @@ RET.J:	RETURN
 
 .IF NE C$DBL
 	.GLOBL PU$64
-EMDBL:	MOV	#TY.DBL, R5
+EMDBL:	CMPB	(R5)+, (R5)+	; R5: #TY.DBL
 	.EMI	PU$64
 	MOV	(PC)+, R1
 TOKVA2::.WORD	0
@@ -1149,12 +1144,12 @@ PBINA4:	R.TOK
 
 BIN3:	UN.TOK
 BIN11:	CMP	SP, TSTKB
-	BNE	19$
+	BNE	2$
 	TST	R1
-	BNE	RET.K
+	BNE	1$
 	R.TOK
-	RETURN
-19$:	C.RVAL
+1$:	RETURN
+2$:	C.RVAL
 	MOV	R1, R4	; R4: type
 	POP	R1
 	MOV	R1, R2
@@ -1163,7 +1158,7 @@ BIN11:	CMP	SP, TSTKB
 	case	T.LOR	, PANDOR
 	default
 	CALL	GENBIN
-PBIN.A:	BR	PBINA4
+	BR	PBINA4
 
 
 ;; Init Global char array by string literal
@@ -1330,6 +1325,7 @@ HCASE1:	CK.TOK	T.COLON
 			; Fallthrough
 ;; Parse Statement
 STMT::	G.TOK
+	MOV	#LOOP, R5
 	switch
 	case	T.GOTO	, GOTO
 	case	T.BREAK	, BREAK
@@ -1471,7 +1467,7 @@ IF:	.BEXPR
 
 
 WHILE:	CLR	R4
-	JSR	R5, LOOP
+	JSR	R5, (R5)
 	.BEXPR
 	EM.BEQ
 	MOV	R1, R2
@@ -1492,7 +1488,7 @@ FOR:	CK.TOK	T.LPAR
 	CK.TOK	T.SEMI
 2$:	EM.JMP
 	MOV	R1, R4		; R4: place for Offset to Body
-	JSR	R5, LOOP
+	JSR	R5, (R5)
 	IF.TOK	T.RPAR,	3$
 	.PEXPP
 	EM.POP
@@ -1511,7 +1507,7 @@ ELOOP2:	POP	CUCONT
 
 DO:     .EMI	T$JMP
 	.EMIT	4
-	JSR	R5, LOOP
+	JSR	R5, (R5)
 	EM.JMP
 	MOV	R1, R5		; R5: place to insert the offset to condition
 	.STMT
@@ -1523,7 +1519,6 @@ DO:     .EMI	T$JMP
 	TST	(R2)+		; R2: TEXT-offset of body
 	EM.OFF
 	BR	ELOOP2
-
 
 
 SWITC:	PUSH	CUBRK

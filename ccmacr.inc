@@ -433,6 +433,7 @@
 .ENDM	.EMIT
 
 ;; Parse unary expression
+;; Does not modify R1
 .MACRO	.UNARY
 	TRAP	^o340
 .ENDM	.UNARY
@@ -696,13 +697,17 @@ T.DECR	= ^x0F2A		; --
 T.ARRO	= ^x0F2B		; ->
 
 
-T.3DOT	= ^x59			; ...
 T.SYM	= ^x5A
 
 T.LPAR	= ^x28			; (
 T.RPAR	= ^x29			; )
 T.COMM	= ^x2C			; ,
+
+;;---
 T.DOT	= ^x2E			; .
+T.3DOT	= ^x2F			; ...
+;;---
+
 T.COLO	= ^x3A			; :
 T.SEMI	= ^x3B			; ;
 T.BRA	= ^x5B			; [

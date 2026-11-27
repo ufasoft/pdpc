@@ -333,8 +333,8 @@ INCLUDE:CLRB	NO.EXP
 	CLR	TMP+2
 1$:	R.LCHR
 	BEQ	ERR.O
-	CMPB	R1, #'>
-	BEQ	2$
+	switch
+	case	'>	, 2$
 	PUSH.B	TMP
 	BR	1$
 2$:	PU.BZ	TMP
@@ -427,9 +427,10 @@ INTOK::	.WORD	0		; In process of Token reading after first char is read
 	BR	NEXTB9
 6$:	.NEXTC
 	BEQ	NEXTB9
-	CMP	R1, #C.NL
-	BNE	6$
-	BR	NEXTB9
+	switch
+	case	C.NL	, NEXTB9
+	default
+	BR	6$
 
 7$:	.NEXTC			; Skip comment
 8$:	CMPB	R1, #'*
@@ -591,9 +592,6 @@ PAINT6:	MOV	R0, TOKVA0
 TOKTYP::.WORD	0
 	BR	PARE.B
 
-PADOT1:	PUSH	#T.3DOT
-	IF.CHR	'., PAID
-ERR.13:	.ERR	13.
 
 PADOT:	R.CHR
 	BEQ	RTOK6
@@ -604,6 +602,10 @@ PADOT:	R.CHR
 	BEQ	RTOK5
 	MOVB	R2, (R5)+	; write '. into $SCRAT
 	BR	PANU4		; Set T.LFLT token type
+
+PADOT1:	INC	R1		; R1: #T.3DOT
+	IF.CHR	'., PARE
+ERR.13:	.ERR	13.
 
 
 PAHEX:	ASL	R3		; R3: 16.
@@ -677,7 +679,34 @@ EXPAND::
 ;!!!?	INC	IS.INV
 	CLR	-(SP)		; (SP): EXPANS len after non-space
 1$:	R.TOK
-	BEQ	8$
+	BNE	2$
+	;; Expand body
+8$:	TST	(SP)+		; Discard EXPANS len
+	PUSH.B	EXPANS
+	;POP	R1
+	;LS.INS	PPCUR
+	POP	CURINP
+	CLRB	NO.EXP
+;!!!	DEC	IS.INV
+	DEC	IS.OPE
+
+;; Clear args pointers in BINDS
+	MOV	#BINDS+2, R3
+	MOV	(R3), R2
+	ADD	-(R3), R2
+10$:	CMP	R2, (R3)	; CMP R2, BINDS
+	BEQ	RET.C
+	MOV	-(R2), R1
+	.free
+	BR	10$
+
+
+;; ##
+12$:	MOV	(SP), EXPANS+2
+11$:	G.TOK
+	switch
+	case	T.SP	, 11$
+	default
 2$:	switch
 	case	T.SH	, 5$	; #
 	case	T.SHSH	, 12$	; ##
@@ -692,12 +721,6 @@ EXPAND::
 	MOV	EXPANS+2, (SP)
 	BR	1$
 
-;; ##
-12$:	MOV	(SP), EXPANS+2
-11$:	G.TOK
-	CMP	R1, #T.SP
-	BEQ	11$
-	BR	2$
 
 4$:	PUSH	R1
 	CALL	EXPARG
@@ -717,26 +740,6 @@ EXPAND::
 	;!!!R MOV	(SP), R1
 	;LS.DEL	PPCUR
 
-	;; Expand body
-
-8$:	TST	(SP)+		; Discard EXPANS len
-	PUSH.B	EXPANS
-	;POP	R1
-	;LS.INS	PPCUR
-	POP	CURINP
-	CLRB	NO.EXP
-;!!!	DEC	IS.INV
-	DEC	IS.OPE
-
-;; Clear args pointers in BINDS
-	MOV	#BINDS+2, R3
-	MOV	(R3), R2
-	ADD	-(R3), R2
-10$:	CMP	R2, (R3)	; CMP R2, BINDS
-	BEQ	RET.C
-	MOV	-(R2), R1
-	.free
-	BR	10$
 
 
 ;; Search $SCRAT symbol in PPCUR and if found, expand it
