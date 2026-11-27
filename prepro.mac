@@ -435,7 +435,10 @@ RTOKSP: CMP	R1, #C.NL
 	BNE	1$
 ;!!!?	CLR	NSLINE
 	TSTB	IS.PP
-	BNE	RTOK8
+	BEQ	1$
+	.UNGET
+	CLR	R1
+	BR	RTOK9
 1$:	MOV	#T.SP, R1
 	TST	(PC)+
 IS.OPE::.WORD	0		; Option -E
@@ -447,6 +450,7 @@ RTOK::	CLR	ASCII + 2
 	BNE	RTOKSP		; Skip Whitespace
 	MOV	SP, INTOK
 	MOVB	R1, R2
+	MOV	#TOKTYP, R4
 	MOV	#$SCRAT, R5
 	switch
 	case	'_	, RSYM
@@ -487,10 +491,7 @@ RSYM2:	PUSH	#T.SYM
 PARE:	PUSH	R1		; End of Token
 PAID:	PU.BZ	ASCII
 	POP	R1
-	BR	RTOK9		; Preprocessor reads tokens until EOL
-RTOK8:	.UNGET
-	CLR	R1
-RTOK9:	MOV	R1, NX.TOK
+RTOK9:	MOV	R1, NX.TOK	; Preprocessor reads tokens until EOL
 	RETURN
 
 
@@ -528,8 +529,7 @@ PARE.B:	BR	PARE
 
 
 
-PANUM:	MOV	#TOKTYP, R4
-	MOVB	#T.LINT, (R4)
+PANUM:	MOVB	#T.LINT, (R4)
 	MOV	#10., R3	; R3: base
 	CMPB	R1, #'0
 	BNE	PANU1
@@ -579,7 +579,6 @@ PADOT:	R.CHR
 	.isdigit
 	BEQ	RTOK5
 	.UNGET
-	MOV	#TOKTYP, R4
 	BR	PANU4		; Set T.LFLT token type
 
 
