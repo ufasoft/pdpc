@@ -320,16 +320,6 @@
 	.WORD	list
 .ENDM	LS.DEL
 
-;; CRADIX-50
-;;  - same as RADIX-50, but '_' is encoded as '.' <34>
-
-;; Encode ASCIZ in $SCRAT to CRADIX-50 in SYNAM0, SYNAM1
-;; OUTPUTL R1: SYNAM0
-.MACRO	A.R50
-	TRAP	^o143
-.ENDM	A.R50
-
-
 ;; Find 2-word entry in table, following this macro
 ;; OUTPUT: R1: number of symbol, CF=1
 ;; or branch by offset in Last Word, if the Symbol not found
@@ -402,7 +392,7 @@
 
 ;; MOV R3, R1; SZ.TYP
 .MACRO	SZ.TY3
-	TRAP	^o232
+	TRAP	^o143
 .ENDM	SZ.TY3
 
 ;; R1: type

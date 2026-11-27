@@ -40,6 +40,25 @@ TMP2RA::MOV	(R2), R1
 	CLR	(R2)+
 	RETURN
 
+;; Encode 3 chars of C identifier in (R4) to CRADIX-50
+A2R50A:	CLR	R5
+	MOV	#3, R2
+1$:	MUL	#50, R5
+	MOVB	(R4), R0
+	BEQ	5$
+	CMPB	(R4)+, #'_
+	BEQ	3$
+	BIC	#40, R0
+	SUB	#100, R0
+	BGT	4$
+	ADD	#36 + 100 - 20 - 34 + '_, R0
+3$:	ADD	#34 - '_, R0
+4$:	ADD	R0, R5
+5$:	SOB	R2, 1$
+	MOV	R5, (R3)+
+	RTS	R3
+
+
 
 
 ;; Define preprocessor symbol
@@ -462,6 +481,7 @@ BCCRT9:	BCC	RTOK9
 	default
 	.isalpha
 	BEQ	NRSYM
+	MOV	R5, R4		; R4: #$SCRAT
 RSYM:	MOVB	R1, (R5)+
 	CMP	#$SCRAT+15, R5
 	SBC	R3		; Prevent writing behind $SCRAT buffer
@@ -472,7 +492,16 @@ RSYM:	MOVB	R1, (R5)+
 	BEQ	RSYM
 	CLRB	(R5)+
 	.UNGET
-	A.R50
+
+;; Encode Symbol into CRADIX-50
+;; INPUT: $SCRAT: ASCIZ string
+	JSR	R3, A2R50A
+SYNAM0::.WORD	0
+	MOV	R5, R1
+	JSR	R3, A2R50A
+SYNAM1::.WORD	0
+;; SYNAM0:SYNAM1: CRADIX-50 representation, same as RADIX-50, but '_' is encoded as '.' <34>
+
 	TSTB	NO.EXP
 	BNE	RSYM2
 	CALL	TRYEXP
