@@ -1020,8 +1020,7 @@ TERNAR:	EM.POP
 	CK.TOK	T.COLON
 	EM.JMP
 	PUSH	R1
-	MOV	R5, R1
-	EM.COF			; Fill  condition branch
+	EM.CO5			; Fill  condition branch
 	.EXPR
 	C.RVAL
 	EXTY.P
@@ -1458,15 +1457,14 @@ IF:	.BEXPR
 	MOV	R1, R4
 	.STMT
 	IF.TOK	T.ELSE, 2$
-	MOV	R4, R1
+	MOV	R4, R5
 	BR	3$
 2$:	EM.JMP
 	MOV	R1, R5
 	MOV	R4, R1
 	EM.COF
 	.STMT
-	MOV	R5, R1
-3$:	EM.COF
+3$:	EM.CO5
 	RETURN
 
 
@@ -1515,14 +1513,13 @@ DO:     .EMI	T$JMP
 	.EMIT	4
 	JSR	R5, LOOP
 	EM.JMP
-	MOV	R1, R4		; R4: place to insert the offset to condition
+	MOV	R1, R5		; R5: place to insert the offset to condition
 	.STMT
 	CK.TOK	T.WHILE
-	MOV	R4, R1
-	EM.COF
+	EM.CO5
 	.BEXPR
 	EM.BNE
-	MOV	R4, R2
+	MOV	R5, R2
 	TST	(R2)+		; R2: TEXT-offset of body
 	EM.OFF
 	BR	ELOOP2
@@ -1545,8 +1542,7 @@ SWITC:	PUSH	CUBRK
 	EM.JMP
 	PUSH	R1
 ;	PUSH.W	BREAKS
-	MOV	R5, R1
-	EM.COF
+	EM.CO5
 
 	MOV	#CASES, R3
 	MOV	(R3)+, R4

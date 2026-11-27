@@ -25,6 +25,10 @@
 	TRAP	^o152
 .ENDM	EM.COF
 
+;; MOV R5, R1; EM.COF
+.MACRO	EM.CO5
+	TRAP	^o233
+.ENDM	EM.CO5
 
 ;; Emit T-code instr and zero place after it
 ;;   R1: offset to T.JMP's argument in TEXT segment
