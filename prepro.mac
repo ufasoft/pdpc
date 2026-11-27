@@ -438,7 +438,7 @@ RTOKSP: CMP	R1, #C.NL
 	BEQ	1$
 	.UNGET
 	CLR	R1
-	BR	RTOK9
+	BR	BCCRT9		; BCC RTOK9
 1$:	MOV	#T.SP, R1
 	TST	(PC)+
 IS.OPE::.WORD	0		; Option -E
@@ -446,10 +446,11 @@ IS.OPE::.WORD	0		; Option -E
 RTOK::	CLR	ASCII + 2
 	CLR	INTOK
 	CALL	RCH
-	BCC	RTOK9
+BCCRT9:	BCC	RTOK9
 	BNE	RTOKSP		; Skip Whitespace
 	MOV	SP, INTOK
 	MOVB	R1, R2
+	MOV	#10., R3
 	MOV	#TOKTYP, R4
 	MOV	#$SCRAT, R5
 	switch
@@ -527,10 +528,10 @@ NRSY1:	DEC	R1
 7$:	ADD	#T.LSHA+1, R1
 PARE.B:	BR	PARE
 
-
-
+;; R3: #10. (base)
+;; R4: #TOKTYP
+;; R5: #$SCRAT
 PANUM:	MOVB	#T.LINT, (R4)
-	MOV	#10., R3	; R3: base
 	CMPB	R1, #'0
 	BNE	PANU1
 	TST	-(R3)		; R3: 8.
@@ -578,7 +579,7 @@ PADOT:	R.CHR
 	default
 	.isdigit
 	BEQ	RTOK5
-	.UNGET
+	MOVB	R2, (R5)+	; write '. into $SCRAT
 	BR	PANU4		; Set T.LFLT token type
 
 
