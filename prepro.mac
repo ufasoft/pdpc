@@ -447,7 +447,7 @@ RTOK::	CLR	ASCII + 2
 	BNE	RTOKSP		; Skip Whitespace
 	MOV	SP, INTOK
 	MOVB	R1, R2
-	MOV	#$SCRAT, R3
+	MOV	#$SCRAT, R5
 	switch
 	case	'_	, RSYM
 	case	''	, PACHR
@@ -457,15 +457,15 @@ RTOK::	CLR	ASCII + 2
 	default
 	.isalpha
 	BEQ	NRSYM
-RSYM:	MOVB	R1, (R3)+
-	CMP	#$SCRAT+15, R3
+RSYM:	MOVB	R1, (R5)+
+	CMP	#$SCRAT+15, R5
 	SBC	R3		; Prevent writing behind $SCRAT buffer
 	R.CHR
 	.isalnum
 	BNE	RSYM
 	CMPB	R1, #'_
 	BEQ	RSYM
-	CLRB	(R3)+
+	CLRB	(R5)+
 	.UNGET
 	A.R50
 	TSTB	NO.EXP
@@ -528,23 +528,18 @@ PARE.B:	BR	PARE
 
 
 
-
-
-PANUM:	CLR	R2		; Is Float flag
-	MOV	#TOKTYP, R4
+PANUM:	MOV	#TOKTYP, R4
 	MOVB	#T.LINT, (R4)
-	MOV	#10., R5	; R5: base
+	MOV	#10., R3	; R3: base
 	CMPB	R1, #'0
 	BNE	PANU1
-	TST	-(R5)		; R5: 8.
+	TST	-(R3)		; R3: 8.
 	R.CHR
 	switch
 	case	'X	, PAHEX
 	case	'x	, PAHEX
 	default
 	BR	PANU7
-
-
 
 
 PASTR:	PUSH	R1		; PUSH #T.LSTR
@@ -563,10 +558,7 @@ PSHSH:	INC	R1		; R1: T.SHSH
 	RETURN
 
 
-
-;!!!R PADEC:  MOV	#10., R5
-PAINT5:	MOV	R5, R3
-PAINT::	CLR	R2
+PAINT5:	CLR	R2
 	CLR	R0
 	CALL	strtol
 PAINT6:	MOV	R0, TOKVA0
@@ -587,26 +579,20 @@ PADOT:	R.CHR
 	.isdigit
 	BEQ	RTOK5
 	.UNGET
-	MOV	#TOKTYP, R4	; R2: '. here (Float flag)
-	BR	PANU1
+	MOV	#TOKTYP, R4
+	BR	PANU4		; Set T.LFLT token type
 
 
-
-
-
-;!!!R PAOCT:	MOV	#8., R3
-;!!!R 	BR	PAINT
-
-PAHEX:	ASL	R5		; R5: 16.
+PAHEX:	ASL	R3		; R3: 16.
 	BR	PANU2
 
 
-PANU3:	CMP	R5, #16.
+PANU3:	CMP	R3, #16.
 	BEQ	PANU1
-	MOVB	R1, (R3)+
+	MOVB	R1, (R5)+
 	G.CHR
-PANU4:	INC	R2		; Set Float flag
-PANU1:	MOVB	R1, (R3)+
+PANU4:	MOVB	#T.LFLT, (R4)	; TOKTYP
+PANU1:	MOVB	R1, (R5)+
 PANU2:	R.CHR
 PANU7:	switch
 	case	0	, PANU8
@@ -621,11 +607,10 @@ PANU7:	switch
 	.SUBRC	isxdigit
 	BNE	PANU1
 	.UNGET
-PANU8:	CLRB	(R3)+
+PANU8:	CLRB	(R5)+
 	MOV	#$SCRAT, R1
-	TST	R2
-	BEQ	PAINT5		; Integer, R5: radix
-	MOVB	#T.LFLT, (R4)	; TOKTYP
+	CMP	(R4), #T.LFLT
+	BNE	PAINT5		; Integer, R3: radix
 	CALL	atof
 	BR	PAINT6
 PANUL:	IF.CHR	'L, 1$		; LL suffix
