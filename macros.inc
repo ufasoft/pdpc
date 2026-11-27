@@ -47,6 +47,8 @@ EMFILE	=: 24.
 .GLOBL	$AREA
 
 $PINVO	=: ^o120		; Previous Vector 10
+SYNAM1	=: ^o304
+SYNAM0	=: ^o306
 $SCRAT	=: ^o310		; Scratch buffer for temporary values
 $STKLO	=: ^o600
 $ISTAC	=: ^o1000		; Temporary stack, active during initialization
