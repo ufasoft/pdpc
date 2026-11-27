@@ -59,8 +59,6 @@ A2R50A:	CLR	R5
 	RTS	R3
 
 
-
-
 ;; Define preprocessor symbol
 ;; R1: name as ASCII
 ;; R2: value as ASCII
@@ -497,7 +495,6 @@ RSYM:	MOVB	R1, (R5)+
 ;; INPUT: $SCRAT: ASCIZ string
 	JSR	R3, A2R50A
 SYNAM0::.WORD	0
-	MOV	R5, R1
 	JSR	R3, A2R50A
 SYNAM1::.WORD	0
 ;; SYNAM0:SYNAM1: CRADIX-50 representation, same as RADIX-50, but '_' is encoded as '.' <34>
