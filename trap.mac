@@ -736,8 +736,7 @@ OULEN:	.WORD	0
 	CLR	OUCSUM
 	BR	RE.G
 
-
-;; C.RVAL
+UNRV.P:	.UNARY
 RVAL.C:	EXTY.P
 	MOV	(R4), R1	; R1: type
 	BPL	RE.G		; Already R-Value
@@ -1042,9 +1041,6 @@ LVAL.C:	.EXTYP
 NEG.R1:	NEG	R1
 	BR	RE.J
 
-UNRV.P:	.UNARY
-	C.RVAL
-	BR	RE.J
 
 TOK.R:	CALL	TOKR		;!!!O
 	BR	RE.J
