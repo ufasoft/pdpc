@@ -92,9 +92,8 @@ SKRE.C:	BR	SKRE.D
 
 
 ;; #elif
-ELIF:	TST	(R5)		; TST CNDMSK
-	BPL	FALS		; after active part
-	ASL	(R5)		; ASL CNDMSK
+ELIF:	ASL	(R5)		; ASL CNDMSK
+	BCC	FALS		; after active part
 IF1:	PUSH	#IF2
 ;; Eval integer constant expression in #if
 ;; Returns: CF=0 on true
@@ -231,8 +230,8 @@ ERR.O:	.ERR
 ELSE:	CLR	(R4)		; CNDMOD = True
    	TST	(R5)		; TST CNDMSK
 	BMI	SKREST
-FALS:	DEC	(R3)		; Don't consider following `else`s or `elif`s
 	ASL	(R5)		; ASL CNDMSK
+FALS:	DEC	(R3)		; Don't consider following `else`s or `elif`s
 	MOV	SP, (R4)	; CNDMOD = False
 SKRE.D:	BR	SKREST
 
